@@ -85,25 +85,29 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     split_description = config["split_description"]
     use_one_to_one = force_one_to_one if force_one_to_one is not None else config.get("one_to_one", True)
     created_date = datetime.now().strftime("%Y-%m-%d")
-    
-    # 1. Find all ZIDs in the text and select the chronologically latest (maximum value)
-    zids = re.findall(r'\b(\d{14})\b', text)
-    if not zids:
-        print("[!] No ZID found in the input block.")
-        return [], 0
-        
-    zid = max(zids, key=int)
-
-    # 2. Find the line that contains or starts with the resolved ZID to handle Antigravity prepended logs
+    # 1. Scan lines to find a ZID that acts as a prefix or header (ignoring service lines)
+    # Match pattern supporting headers (###), lists (- [ ]), quotes (>), bold/italic markers
+    zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?(\d{14})\b')
     lines = text.splitlines()
-    zid_line_idx = -1
-    zid_header_pattern = re.compile(rf'^\s*(?:[-*+]\s+)?(?:\d+\.\s+)?(?:\*\*|__)??{re.escape(zid)}\b')
     
+    zid = None
+    zid_line_idx = -1
     for idx, line in enumerate(lines):
-        if zid_header_pattern.match(line):
+        trimmed = line.strip()
+        if any(trimmed.startswith(p) for p in ["Edited ", "Viewed ", "Ran command:", "Created At:", "Completed At:"]):
+            continue
+        
+        match_obj = zid_header_pattern.match(line)
+        if match_obj:
+            zid = match_obj.group(1)
             zid_line_idx = idx
             break
             
+    # 2. If no ZID header is found, generate a brand new ZID for this note
+    if not zid:
+        zid = datetime.now().strftime("%Y%m%d%H%M%S")
+        print(f"[*] No ZID header found — generated new ZID: {zid}")
+        
     clean_task_name = ""
     if zid_line_idx != -1:
         # Check if the ZID line itself has additional text
@@ -111,6 +115,8 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         match_obj = zid_header_pattern.match(zid_line)
         prefix_and_zid = match_obj.group(0)
         remaining_text = zid_line[len(prefix_and_zid):].strip()
+        # Strip trailing bold/italic markers if present
+        remaining_text = re.sub(r'^(?:\*\*|__|[*_])|(?:\*\*|__|[*_])$', '', remaining_text).strip()
         
         # If there's remaining text on the ZID line, use it!
         if remaining_text:
@@ -122,16 +128,12 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
                 if line_content:
                     clean_task_name = clean_task_name_formatting(line_content)
                     break
-    
-    # Precautionary fallback: if no ZID line was matched or no task name found,
-    # fall back to the first non-empty line of the block (excluding service logs if possible)
-    if not clean_task_name:
+    else:
+        # Fall back to the first non-empty line of the block (excluding service logs)
         for line in lines:
             cleaned_line = line.strip()
-            # Ignore common service log prefixes or standard ZID-only lines
-            if cleaned_line and cleaned_line != zid:
-                # Basic check to avoid service lines if there are other lines
-                is_service_line = any(cleaned_line.startswith(p) for p in ["Edited ", "Viewed ", "Ran command:"])
+            if cleaned_line:
+                is_service_line = any(cleaned_line.startswith(p) for p in ["Edited ", "Viewed ", "Ran command:", "Created At:", "Completed At:"])
                 if is_service_line and len(lines) > 2:
                     continue
                 clean_task_name = clean_task_name_formatting(cleaned_line)
