@@ -38,6 +38,9 @@ class TestNoteCreator(unittest.TestCase):
         # Inner hyphens/underscores (double hyphen parity)
         self.assertEqual(clean_task_name_formatting("and--open"), "and--open")
         self.assertEqual(clean_task_name_formatting("U:\\path\\to\\_template.md"), "U:\\path\\to\\_template.md")
+        
+        # Markdown links stripping
+        self.assertEqual(clean_task_name_formatting("Updated [AGENTS.md](file:///path/to/AGENTS.md) here."), "Updated AGENTS.md here.")
 
     def test_sanitize_name(self):
         """

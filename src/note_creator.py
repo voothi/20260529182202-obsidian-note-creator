@@ -63,6 +63,8 @@ def clean_task_name_formatting(task_name):
     task_name = re.sub(r'^\s*#+\s+', '', task_name)
     # 3. Strip backticks and asterisks anywhere
     task_name = task_name.replace('`', '').replace('*', '')
+    # 3.5. Strip markdown links: [Text](URL) -> Text
+    task_name = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', task_name)
     # 4. Strip surrounding underscores if they format the entire task name
     while True:
         prev_name = task_name
