@@ -54,28 +54,26 @@ due:
 
 def clean_task_name_formatting(task_name):
     """
-    Cleans leading list markers, headers, and surrounding formatting (backticks, asterisks, underscores)
+    Cleans leading list markers, headers, and formatting markers (backticks, asterisks)
     from a task name while preserving inner hyphens and underscores.
     """
     # 1. Strip leading list markers: e.g., "- [ ] ", "- ", "* ", "+ ", "1. "
     task_name = re.sub(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s+', '', task_name)
     # 2. Strip leading hashes: e.g., "### "
     task_name = re.sub(r'^\s*#+\s+', '', task_name)
-    # 3. Strip surrounding backticks, asterisks, underscores
-    task_name = task_name.strip()
+    # 3. Strip backticks and asterisks anywhere
+    task_name = task_name.replace('`', '').replace('*', '')
+    # 4. Strip surrounding underscores if they format the entire task name
     while True:
         prev_name = task_name
-        # Strip backticks
-        if task_name.startswith('`') and task_name.endswith('`'):
-            task_name = task_name[1:-1].strip()
-        # Strip double asterisks/underscores
-        elif (task_name.startswith('**') and task_name.endswith('**')) or (task_name.startswith('__') and task_name.endswith('__')):
+        if task_name.startswith('__') and task_name.endswith('__'):
             task_name = task_name[2:-2].strip()
-        # Strip single asterisks/underscores
-        elif (task_name.startswith('*') and task_name.endswith('*')) or (task_name.startswith('_') and task_name.endswith('_')):
+        elif task_name.startswith('_') and task_name.endswith('_'):
             task_name = task_name[1:-1].strip()
         if task_name == prev_name:
             break
+    # 5. Strip leading/trailing spaces
+    task_name = task_name.strip()
     return task_name
 
 def process_single_message_block(text, config, parent_title, dry_run=False, force_one_to_one=None):

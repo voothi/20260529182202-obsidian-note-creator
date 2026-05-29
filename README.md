@@ -39,9 +39,11 @@ When working inside complex Obsidian vaults, quickly documenting ideas, tasks, o
 ├── .gitignore               # Excludes python caches and local configs
 ├── LICENSE                  # MIT License
 ├── README.md                # Premium documentation
-└── src/                     # Source directory containing utilities
-    ├── utils.py             # Shared slug generation and configuration loading
-    └── note_creator.py      # Core ZID parser, note generator, and MOC editor
+├── src/                     # Source directory containing utilities
+│   ├── utils.py             # Shared slug generation and configuration loading
+│   └── note_creator.py      # Core ZID parser, note generator, and MOC editor
+└── tests/                   # Automated unit test suite
+    └── test_note_creator.py # Comprehensive test coverage for parsing, formats, and workarounds
 ```
 
 [Return to Top](#obsidian-zid-note-creator-utility)
@@ -112,6 +114,15 @@ Add the following snippet to your global AHK script inside `U:\voothi\2024041111
     KeyWait "Control"
     Send("^v")
 }
+```
+
+[Return to Top](#obsidian-zid-note-creator-utility)
+
+## Running Tests
+
+To run the comprehensive unit test suite and verify formatting, sanitization, and parsing workarounds, execute:
+```powershell
+python tests/test_note_creator.py
 ```
 
 [Return to Top](#obsidian-zid-note-creator-utility)
