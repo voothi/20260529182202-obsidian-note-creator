@@ -218,7 +218,11 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     
     print(f"[*] Smart Mode - Found ZID: {zid} -> Slug: {safe_slug}")
     
-    note_description = text.strip() if use_one_to_one else text.replace(zid, "").strip()
+    _, remaining_desc = split_first_sentence(text.replace(zid, "").strip(), split_description)
+    if use_one_to_one:
+        note_description = "" if not remaining_desc.strip() else text.strip()
+    else:
+        note_description = remaining_desc.strip()
     
     if not dry_run:
         # Prevent overwrite
@@ -273,7 +277,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 
             clean_task_name, description_text = split_first_sentence(raw_text, split_description)
             clean_task_name = clean_task_name_formatting(clean_task_name)
-            note_description = raw_text.strip() if use_one_to_one else description_text
+            note_description = "" if (use_one_to_one and not description_text.strip()) else (raw_text.strip() if use_one_to_one else description_text)
             
             safe_slug = sanitize_name(clean_task_name, slug_word_count)
             filename = f"{zid}-{safe_slug}"
@@ -314,7 +318,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                     
                 clean_task_name, description_text = split_first_sentence(raw_text, split_description)
                 clean_task_name = clean_task_name_formatting(clean_task_name)
-                note_description = raw_text.strip() if use_one_to_one else description_text
+                note_description = "" if (use_one_to_one and not description_text.strip()) else (raw_text.strip() if use_one_to_one else description_text)
                 
                 safe_slug = sanitize_name(clean_task_name, slug_word_count)
                 filename = f"{zid}-{safe_slug}"
