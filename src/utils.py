@@ -1,0 +1,72 @@
+import os
+import re
+import configparser
+
+def get_config(config_path="config.ini"):
+    """
+    Loads configuration settings from config.ini, falling back to defaults if not found.
+    """
+    config = configparser.ConfigParser()
+    if os.path.exists(config_path):
+        config.read(config_path, encoding="utf-8")
+    
+    # Defaults
+    conversations_dir = config.get("Obsidian", "conversations_dir", fallback=r"U:\voothi.vault\kardenwort-mpv\conversations")
+    active_conversation = config.get("Obsidian", "active_conversation", fallback=r"U:\voothi.vault\kardenwort-mpv\conversations\20260529122032-conversation.md")
+    slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
+    split_description = config.getboolean("Parser", "split_description", fallback=True)
+    one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)
+
+    return {
+        "conversations_dir": conversations_dir,
+        "active_conversation": active_conversation,
+        "slug_word_count": slug_word_count,
+        "split_description": split_description,
+        "one_to_one": one_to_one
+    }
+
+
+def sanitize_name(input_string, slug_word_count=4):
+    """
+    Sanitizes title string to create a safe, slugified filename.
+    Matches the Obsidian Templater logic exactly.
+    """
+    replacements = {
+        'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss',
+        'Ä': 'ae', 'Ö': 'oe', 'Ü': 'ue', 
+        '_': '-', ':': '-', '. ': '-', '.': '-'
+    }
+    
+    processed_string = input_string
+    for char, rep in replacements.items():
+        processed_string = processed_string.replace(char, rep)
+    
+    # Remove characters that are not letters, numbers, spaces, or hyphens.
+    # Matches /[^a-zA-Zа-яА-ЯёЁ0-9\s-]/g in JavaScript exactly.
+    cleaned_for_splitting = re.sub(r'[^a-zA-Zа-яА-ЯёЁ0-9\s-]', '', processed_string)
+    
+    # Split by spaces and get the first N words
+    words = cleaned_for_splitting.strip().split()
+    first_words = words[:slug_word_count]
+    
+    final_name = '-'.join(first_words)
+    final_name = re.sub(r'-+$', '', final_name)
+    
+    return final_name.lower()
+
+def split_first_sentence(text, split_enabled=True):
+    """
+    Splits the first sentence of the text as the task name, 
+    and returns the rest as the description.
+    """
+    if not split_enabled:
+        return text.strip(), ""
+        
+    # Regex matching the first sentence ending with . ? or !
+    split_match = re.match(r'^(.*?[.?!])(?:\s+|$)(.*)$', text, re.DOTALL)
+    if split_match:
+        clean_task_name = split_match.group(1).strip()
+        description_text = split_match.group(2).strip() if split_match.group(2) else ""
+        return clean_task_name, description_text
+    
+    return text.strip(), ""

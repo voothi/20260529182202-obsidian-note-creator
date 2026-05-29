@@ -1,0 +1,17 @@
+[Obsidian]
+# Path to the conversations folder inside the vault
+conversations_dir = U:\voothi.vault\kardenwort-mpv\conversations
+
+# Default active conversation markdown file to update
+active_conversation = U:\voothi.vault\kardenwort-mpv\conversations\20260529122032-conversation.md
+
+[Parser]
+# Number of words to retain in the filename slug
+slug_word_count = 4
+
+# Whether to split the first sentence as task title and the rest as description
+split_description = True
+
+# Whether to save the full original message text inside the note description
+one_to_one = True
+
