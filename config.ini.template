@@ -9,6 +9,15 @@ conversations_dir = U:\voothi.vault\kardenwort-mpv\conversations
 # Default active conversation markdown file to update
 active_conversation = U:\voothi.vault\kardenwort-mpv\conversations\20260529122032-conversation.md
 
+# Automatically create the vault project folder in vault_base if it doesn't exist,
+# instead of falling back to default configuration.
+auto_create_project = true
+
+# Tooltip display duration in milliseconds (e.g. 4000 for 4 seconds).
+# If empty or 0, tooltips are disabled completely.
+tooltip = 4000
+
+
 [Parser]
 # Number of words to retain in the filename slug
 slug_word_count = 4
