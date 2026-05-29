@@ -90,11 +90,14 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?(\d{14})\b')
     lines = text.splitlines()
     
+    # Complete list of Antigravity service line prefixes to ignore
+    service_prefixes = ["Edited ", "Viewed ", "Ran command:", "Created At:", "Completed At:", "Created file ", "Stdout:", "Stderr:"]
+    
     zid = None
     zid_line_idx = -1
     for idx, line in enumerate(lines):
         trimmed = line.strip()
-        if any(trimmed.startswith(p) for p in ["Edited ", "Viewed ", "Ran command:", "Created At:", "Completed At:"]):
+        if any(trimmed.startswith(p) for p in service_prefixes):
             continue
         
         match_obj = zid_header_pattern.match(line)
@@ -133,7 +136,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         for line in lines:
             cleaned_line = line.strip()
             if cleaned_line:
-                is_service_line = any(cleaned_line.startswith(p) for p in ["Edited ", "Viewed ", "Ran command:", "Created At:", "Completed At:"])
+                is_service_line = any(cleaned_line.startswith(p) for p in service_prefixes)
                 if is_service_line and len(lines) > 2:
                     continue
                 clean_task_name = clean_task_name_formatting(cleaned_line)
