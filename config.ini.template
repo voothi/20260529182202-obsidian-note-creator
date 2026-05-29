@@ -1,4 +1,8 @@
 [Obsidian]
+# FALLBACK CONFIGURATION: These paths are only used if the --workspace argument
+# is not passed to the script. When --workspace is provided, the script will
+# dynamically infer U:\voothi.vault\<project> and auto-discover the active conversation.
+
 # Path to the conversations folder inside the vault
 conversations_dir = U:\voothi.vault\kardenwort-mpv\conversations
 
