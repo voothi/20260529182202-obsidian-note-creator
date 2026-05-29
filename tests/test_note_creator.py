@@ -117,5 +117,33 @@ I have identified exactly why the ZID duplication occurred and have successfully
             "- [[20260529192802-check-the-original-logic|Check the original logic again and--open]]\n"
         )
 
+    def test_moc_duplication_prevention(self):
+        """
+        Verify that update_conversation_moc filters out links that are already
+        present in the conversation file.
+        """
+        from note_creator import update_conversation_moc
+        
+        mock_conv_path = "mock_conversation.md"
+        with open(mock_conv_path, "w", encoding="utf-8") as f:
+            f.write("""# Active Conversation
+## MOC.
+- [[20260529193509-i-have-identified-exactly|I have identified exactly]]
+## Notes
+""")
+            
+        try:
+            new_moc_lines = ["- [[20260529193509-i-have-identified-exactly|I have identified exactly]]\n"]
+            update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False)
+            
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            self.assertEqual(content.count("20260529193509-i-have-identified-exactly"), 1)
+            
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
 if __name__ == '__main__':
     unittest.main()

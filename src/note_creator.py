@@ -292,9 +292,23 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         print("[Error] Could not locate '## MOC.' or '## Notes' in the conversation file.")
         return False
         
-    # Extract current MOC block
-    moc_block = content_lines[moc_start_idx + 1:notes_section_idx]
-    
+    # Filter out new lines if they already exist as links in the conversation
+    filtered_new_moc_lines = []
+    full_content_str = "".join(content_lines)
+    for line in new_moc_lines:
+        link_match = re.search(r'\[\[([^|\]]+)', line)
+        if link_match:
+            filename_target = link_match.group(1).strip()
+            target_pattern = f"[[{filename_target}"
+            if target_pattern in full_content_str:
+                print(f"    [!] Link to '{filename_target}' already exists in conversation MOC. Skipping duplicate link insertion.")
+                continue
+        filtered_new_moc_lines.append(line)
+        
+    if not filtered_new_moc_lines:
+        print("[*] No new links to add to the MOC (all already linked).")
+        return True
+        
     # We find where to append our new lines in the list of MOC items.
     # Typically, we can append them at the end of the existing list items.
     last_item_idx = -1
@@ -310,7 +324,7 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         insert_position = moc_start_idx + 1 + last_item_idx + 1
         
     # Insert new lines
-    updated_content = content_lines[:insert_position] + new_moc_lines + content_lines[insert_position:]
+    updated_content = content_lines[:insert_position] + filtered_new_moc_lines + content_lines[insert_position:]
     
     if not dry_run:
         with open(active_conv_path, "w", encoding="utf-8") as f:
