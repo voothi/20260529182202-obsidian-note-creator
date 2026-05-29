@@ -121,9 +121,7 @@ This utility is part of the Zettelkasten and **[Kardenwort](https://github.com/k
 
 [Return to Top](#obsidian-zid-note-creator-utility)
 
-## Signature
 - **Project Anchor ZID**: `20260529182251`
-- **Signatory**: Antigravity AI Coding Assistant
 
 [Return to Top](#obsidian-zid-note-creator-utility)
 
