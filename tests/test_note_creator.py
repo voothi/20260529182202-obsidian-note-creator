@@ -173,5 +173,59 @@ I have identified exactly why the ZID duplication occurred and have successfully
             if os.path.exists(mock_dir):
                 os.rmdir(mock_dir)
 
+    def test_existing_zid_note_resolution(self):
+        """
+        Verify that processing a ZID line or block when a note with that ZID already
+        exists in the conversations directory (even with a different slug) successfully
+        reuses the existing file name and cleanest title.
+        """
+        mock_dir = "mock_conv_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        # Create an existing note with a custom slug and H1 title
+        existing_note_path = os.path.join(mock_dir, "20260529180506-updated-agents-md-with-lua.md")
+        with open(existing_note_path, "w", encoding="utf-8") as f:
+            f.write("""---
+aliases:
+  - Updated AGENTS.md with Lua guidelines
+---
+
+# Updated AGENTS.md with Lua guidelines.
+
+## Description
+Some description here.
+""")
+            
+        config = {
+            "conversations_dir": mock_dir,
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 4,
+            "split_description": True,
+            "one_to_one": True
+        }
+        
+        try:
+            # Parse a block text representing a verbose status, but sharing the same ZID
+            text = """20260529180506
+I have successfully updated AGENTS.md to add a rule preventing agents from saving trial or temporary .lua scripts in the workspace.
+"""
+            links, count = process_single_message_block(
+                text, config, parent_title="test-conversation", dry_run=True
+            )
+            
+            # Should have count = 0 (since it was skipped as already existing)
+            self.assertEqual(count, 0)
+            # Should reuse the existing slug '20260529180506-updated-agents-md-with-lua' and its H1 title!
+            self.assertEqual(
+                links[0],
+                "- [[20260529180506-updated-agents-md-with-lua|Updated AGENTS.md with Lua guidelines.]]\n"
+            )
+            
+        finally:
+            if os.path.exists(existing_note_path):
+                os.remove(existing_note_path)
+            if os.path.exists(mock_dir):
+                os.rmdir(mock_dir)
+
 if __name__ == '__main__':
     unittest.main()

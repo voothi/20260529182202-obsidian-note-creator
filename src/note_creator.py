@@ -76,6 +76,53 @@ def clean_task_name_formatting(task_name):
     task_name = task_name.strip()
     return task_name
 
+def find_existing_note_by_zid(conversations_dir, zid):
+    """
+    Scans conversations_dir for any markdown file starting with {zid}-.
+    Returns (absolute_path, filename_without_ext, clean_title) if found, else None.
+    """
+    if not os.path.isdir(conversations_dir):
+        return None
+        
+    prefix = f"{zid}-"
+    for entry in os.scandir(conversations_dir):
+        if entry.is_file() and entry.name.startswith(prefix) and entry.name.endswith(".md"):
+            filepath = entry.path
+            filename_no_ext = os.path.splitext(entry.name)[0]
+            
+            title = ""
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    
+                # Parse title from H1 header: e.g. "# Title"
+                for line in lines:
+                    if line.startswith("# "):
+                        title = line[2:].strip()
+                        break
+                        
+                # Fallback: parse title from aliases frontmatter
+                if not title:
+                    in_frontmatter = False
+                    for line in lines:
+                        if line.strip() == "---":
+                            in_frontmatter = not in_frontmatter
+                            continue
+                        if in_frontmatter and line.strip().startswith("-"):
+                            title = line.strip()[1:].strip()
+                            break
+            except Exception:
+                pass
+                
+            if not title:
+                slug = filename_no_ext[len(prefix):]
+                title = slug.replace("-", " ").capitalize()
+                
+            return filepath, filename_no_ext, title
+            
+    return None
+
+
 def process_single_message_block(text, config, parent_title, dry_run=False, force_one_to_one=None):
     """
     Parses a single multi-line chat message, extracts any ZID, and creates a 1-to-1 note.
@@ -110,6 +157,14 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     if not zid:
         zid = datetime.now().strftime("%Y%m%d%H%M%S")
         print(f"[*] No ZID header found — generated new ZID: {zid}")
+        
+    # Check if a note with this ZID already exists in conversations_dir
+    existing = find_existing_note_by_zid(conversations_dir, zid)
+    if existing:
+        existing_path, filename, clean_task_name = existing
+        print(f"[*] Found existing note for ZID {zid}: {filename}.md with title '{clean_task_name}'")
+        link_line = f"- [[{filename}|{clean_task_name}]]\n"
+        return [link_line], 0
         
     clean_task_name = ""
     if zid_line_idx != -1:
@@ -207,6 +262,13 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
             zid = match.group(2)
             raw_text = match.group(3)
             
+            existing = find_existing_note_by_zid(conversations_dir, zid)
+            if existing:
+                existing_path, filename, clean_task_name = existing
+                print(f"[*] Found existing note for ZID {zid}: {filename}.md with title '{clean_task_name}'")
+                updated_lines.append(f"{prefix}[[{filename}|{clean_task_name}]]\n")
+                continue
+                
             clean_task_name, description_text = split_first_sentence(raw_text, split_description)
             clean_task_name = clean_task_name_formatting(clean_task_name)
             note_description = raw_text.strip() if use_one_to_one else description_text
@@ -241,6 +303,13 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 zid = simple_match.group(1)
                 raw_text = simple_match.group(2)
                 
+                existing = find_existing_note_by_zid(conversations_dir, zid)
+                if existing:
+                    existing_path, filename, clean_task_name = existing
+                    print(f"[*] Found existing note for ZID {zid}: {filename}.md with title '{clean_task_name}'")
+                    updated_lines.append(f"[[{filename}|{clean_task_name}]]\n")
+                    continue
+                    
                 clean_task_name, description_text = split_first_sentence(raw_text, split_description)
                 clean_task_name = clean_task_name_formatting(clean_task_name)
                 note_description = raw_text.strip() if use_one_to_one else description_text
