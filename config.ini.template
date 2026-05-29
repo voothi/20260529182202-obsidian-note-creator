@@ -4,10 +4,10 @@
 # dynamically infer U:\voothi.vault\<project> and auto-discover the active conversation.
 
 # Path to the conversations folder inside the vault
-conversations_dir = U:\voothi.vault\kardenwort-mpv\conversations
+conversations_dir = U:\voothi.vault\default\conversations
 
 # Default active conversation markdown file to update
-active_conversation = U:\voothi.vault\kardenwort-mpv\conversations\20260529122032-conversation.md
+active_conversation = U:\voothi.vault\default\conversations\20260529200151-conversation.md
 
 # Automatically create the vault project folder in vault_base if it doesn't exist,
 # instead of falling back to default configuration.
