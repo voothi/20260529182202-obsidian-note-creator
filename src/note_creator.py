@@ -3,7 +3,7 @@ import sys
 import re
 import argparse
 from datetime import datetime
-from utils import get_config, sanitize_name, split_first_sentence
+from utils import get_config, sanitize_name, split_first_sentence, discover_active_conversation
 
 try:
     import pyperclip
@@ -346,9 +346,30 @@ def main():
     parser.add_argument("-cl", "--clipboard", action="store_true", help="Read input text directly from system clipboard, and write formatted wikilinks back to it.")
     parser.add_argument("--one-to-one", dest="one_to_one", action="store_true", default=None, help="Force saving exact copied message inside note description.")
     parser.add_argument("--no-one-to-one", dest="one_to_one", action="store_false", default=None, help="Disable one-to-one saving (revert to description-only).")
+    parser.add_argument("-w", "--workspace", type=str, help="Active workspace name (e.g. 20260308110646-kardenwort-mpv) to dynamically discover project directories and active conversations.")
     
     args = parser.parse_args()
     config = get_config(args.config)
+    
+    if args.workspace:
+        # Strip any leading ZID and trailing info to get the project directory name
+        project_name = args.workspace.strip()
+        project_name = re.sub(r'^\d{14}[-_\s]*', '', project_name)
+        project_name = re.sub(r'\s*\(Workspace\).*', '', project_name).strip()
+        
+        vault_base = r"U:\voothi.vault"
+        conversations_dir = os.path.join(vault_base, project_name, "conversations")
+        
+        if os.path.exists(conversations_dir):
+            config["conversations_dir"] = conversations_dir
+            latest_conv = discover_active_conversation(conversations_dir)
+            if latest_conv:
+                config["active_conversation"] = latest_conv
+                print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
+            else:
+                print(f"[!] No active conversation file found in {conversations_dir}, falling back to default config.")
+        else:
+            print(f"[!] Discovered path '{conversations_dir}' does not exist. Falling back to default config.")
     
     parent_file = os.path.basename(config["active_conversation"])
     parent_title, _ = os.path.splitext(parent_file)

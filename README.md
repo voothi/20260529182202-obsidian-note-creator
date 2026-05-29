@@ -100,15 +100,28 @@ By default, `one_to_one = True` copies the entire source message exactly 1-to-1 
 python src/note_creator.py --no-one-to-one --text "20260529180708 Short title. The rest is standard description."
 ```
 
-### 5. AutoHotkey v2 Hotkey Setup (`Ctrl+Alt+K`)
-Add the following snippet to your global AHK script inside `U:\voothi\20240411110510-autohotkey` to enable high-speed note creations anywhere on your system:
+### 5. AutoHotkey v2 Hotkey Setup (`Ctrl+Alt+K`) with Dynamic Workspace Discovery
+Add the following snippet to your global AHK script inside `U:\voothi\20240411110510-autohotkey` to enable high-speed, universal note creations anywhere on your system across all your projects:
 ```autohotkey
 ^!k::
 {
+    ; Extract the active window title to parse the workspace (e.g., 20260308110646-kardenwort-mpv)
+    activeTitle := WinGetTitle("A")
+    workspace := ""
+    if RegExMatch(activeTitle, "(\d{14}-[\w-]+)", &match) {
+        workspace := match[1]
+    }
+
     Send("^c")
     if !ClipWait(1.5)
         return
-    RunWait("C:\\Python\\Python312\\python.exe U:\\voothi\\20260529182202-obsidian-note-creator\\src\\note_creator.py --clipboard", "U:\\voothi\\20260529182202-obsidian-note-creator", "Hide")
+        
+    cmd := "C:\\Python\\Python312\\python.exe U:\\voothi\\20260529182202-obsidian-note-creator\\src\\note_creator.py --clipboard"
+    if (workspace != "") {
+        cmd .= " --workspace `"" . workspace . "`""
+    }
+    
+    RunWait(cmd, "U:\\voothi\\20260529182202-obsidian-note-creator", "Hide")
     Sleep(300)
     KeyWait "Alt"
     KeyWait "Control"

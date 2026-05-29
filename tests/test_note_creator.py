@@ -145,5 +145,33 @@ I have identified exactly why the ZID duplication occurred and have successfully
             if os.path.exists(mock_conv_path):
                 os.remove(mock_conv_path)
 
+    def test_discover_active_conversation(self):
+        """
+        Verify that discover_active_conversation correctly detects the chronologically
+        latest conversation file in a directory.
+        """
+        from utils import discover_active_conversation
+        
+        mock_dir = "mock_conversations_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        file1 = os.path.join(mock_dir, "20260529120000-conversation.md")
+        file2 = os.path.join(mock_dir, "20260529130000-conversation.md")
+        file3 = os.path.join(mock_dir, "20260529110000-conversation.md")
+        
+        for fpath in [file1, file2, file3]:
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write("# Mock Conversation")
+                
+        try:
+            latest = discover_active_conversation(mock_dir)
+            self.assertEqual(os.path.abspath(latest), os.path.abspath(file2))
+        finally:
+            for fpath in [file1, file2, file3]:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+            if os.path.exists(mock_dir):
+                os.rmdir(mock_dir)
+
 if __name__ == '__main__':
     unittest.main()

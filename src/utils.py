@@ -1,5 +1,6 @@
 import os
 import re
+import glob
 import configparser
 
 def get_config(config_path="config.ini"):
@@ -70,3 +71,30 @@ def split_first_sentence(text, split_enabled=True):
         return clean_task_name, description_text
     
     return text.strip(), ""
+
+def discover_active_conversation(conversations_dir):
+    """
+    Finds the latest conversation file in the conversations directory
+    by sorting files matching '*conversation.md' or '*log.md' chronologically.
+    """
+    if not os.path.exists(conversations_dir):
+        return None
+        
+    pattern = os.path.join(conversations_dir, "*conversation.md")
+    files = glob.glob(pattern)
+    if not files:
+        pattern_log = os.path.join(conversations_dir, "*log.md")
+        files = glob.glob(pattern_log)
+        
+    if not files:
+        return None
+        
+    def extract_zid_key(filepath):
+        basename = os.path.basename(filepath)
+        match = re.match(r'^(\d{14})', basename)
+        if match:
+            return int(match.group(1))
+        return os.path.getmtime(filepath)
+        
+    files.sort(key=extract_zid_key)
+    return files[-1]
