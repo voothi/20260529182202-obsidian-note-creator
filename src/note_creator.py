@@ -161,12 +161,12 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     if not dry_run:
         # Prevent overwrite
         if os.path.exists(note_filepath):
-            print(f"    [!] Note '{filename}.md' already exists. Skipping file creation.")
+            print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
         else:
             note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
             with open(note_filepath, "w", encoding="utf-8") as f:
                 f.write(note_content)
-            print(f"    [+] Created Note: {filename}.md")
+            print(f"    [+] Created Note: {note_filepath}")
             
     # Return formatted MOC link
     link_line = f"- [[{filename}|{clean_task_name}]]\n"
@@ -215,12 +215,12 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
             if not dry_run:
                 # Check for existing note to prevent overwrite
                 if os.path.exists(note_filepath):
-                    print(f"    [!] Note '{filename}.md' already exists. Skipping file creation.")
+                    print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
                 else:
                     note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
                     with open(note_filepath, "w", encoding="utf-8") as f:
                         f.write(note_content)
-                    print(f"    [+] Created Note: {filename}.md")
+                    print(f"    [+] Created Note: {note_filepath}")
                     notes_created += 1
             else:
                 print(f"    [Dry-run] Would create note: {filename}.md")
@@ -248,12 +248,12 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 
                 if not dry_run:
                     if os.path.exists(note_filepath):
-                        print(f"    [!] Note '{filename}.md' already exists. Skipping file creation.")
+                        print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
                     else:
                         note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
                         with open(note_filepath, "w", encoding="utf-8") as f:
                             f.write(note_content)
-                        print(f"    [+] Created Note: {filename}.md")
+                        print(f"    [+] Created Note: {note_filepath}")
                         notes_created += 1
                 else:
                     print(f"    [Dry-run] Would create note: {filename}.md")
@@ -361,18 +361,52 @@ def main():
         project_name = re.sub(r'\s*\(Workspace\).*', '', project_name).strip()
         
         vault_base = r"U:\voothi.vault"
-        conversations_dir = os.path.join(vault_base, project_name, "conversations")
+        project_dir = os.path.join(vault_base, project_name)
         
-        if os.path.exists(conversations_dir):
+        if os.path.exists(project_dir) and os.path.isdir(project_dir):
+            conversations_dir = os.path.join(project_dir, "conversations")
+            
+            # Auto-create conversations directory if it's missing
+            if not os.path.exists(conversations_dir):
+                os.makedirs(conversations_dir, exist_ok=True)
+                print(f"[+] Created conversations directory: {conversations_dir}")
+                
             config["conversations_dir"] = conversations_dir
             latest_conv = discover_active_conversation(conversations_dir)
-            if latest_conv:
-                config["active_conversation"] = latest_conv
-                print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
-            else:
-                print(f"[!] No active conversation file found in {conversations_dir}, falling back to default config.")
+            
+            if not latest_conv:
+                # If no conversation file exists in this directory, initialize one!
+                now_zid = datetime.now().strftime("%Y%m%d%H%M%S")
+                new_conv_filename = f"{now_zid}-conversation.md"
+                new_conv_path = os.path.join(conversations_dir, new_conv_filename)
+                
+                # Create a template active conversation MOC note
+                conv_content = f"""---
+aliases:
+  - Conversation {datetime.now().strftime("%Y-%m-%d")}
+tags:
+  - conversation
+created: {datetime.now().strftime("%Y-%m-%d")}
+---
+
+# Conversation {datetime.now().strftime("%Y-%m-%d")}
+
+## MOC.
+
+
+
+## Notes
+
+"""
+                with open(new_conv_path, "w", encoding="utf-8") as f:
+                    f.write(conv_content)
+                print(f"[+] Initialized active conversation file: {new_conv_filename}")
+                latest_conv = new_conv_path
+                
+            config["active_conversation"] = latest_conv
+            print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
         else:
-            print(f"[!] Discovered path '{conversations_dir}' does not exist. Falling back to default config.")
+            print(f"[!] Discovered project path '{project_dir}' does not exist. Falling back to default config.")
     
     parent_file = os.path.basename(config["active_conversation"])
     parent_title, _ = os.path.splitext(parent_file)
