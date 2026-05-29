@@ -90,8 +90,8 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?(\d{14})\b')
     lines = text.splitlines()
     
-    # Complete list of Antigravity service line prefixes to ignore
-    service_prefixes = ["Edited ", "Viewed ", "Ran command:", "Created At:", "Completed At:", "Created file ", "Stdout:", "Stderr:"]
+    # Load ignore prefixes dynamically from configuration
+    service_prefixes = config.get("ignore_prefixes", [])
     
     zid = None
     zid_line_idx = -1

@@ -18,6 +18,8 @@ def get_config(config_path="config.ini"):
     slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
     split_description = config.getboolean("Parser", "split_description", fallback=True)
     one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)
+    ignore_prefixes_raw = config.get("Parser", "ignore_prefixes", fallback="Edited ,Viewed ,Ran command:,Created At:,Completed At:,Created file ,Stdout:,Stderr:")
+    ignore_prefixes = [p for p in ignore_prefixes_raw.split(",") if p]
 
     return {
         "conversations_dir": conversations_dir,
@@ -25,7 +27,8 @@ def get_config(config_path="config.ini"):
         "auto_create_project": auto_create_project,
         "slug_word_count": slug_word_count,
         "split_description": split_description,
-        "one_to_one": one_to_one
+        "one_to_one": one_to_one,
+        "ignore_prefixes": ignore_prefixes
     }
 
 

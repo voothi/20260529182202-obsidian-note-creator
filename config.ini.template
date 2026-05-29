@@ -28,3 +28,7 @@ split_description = True
 # Whether to save the full original message text inside the note description
 one_to_one = True
 
+# Comma-separated list of line prefixes to ignore during ZID and title scanning (preserves trailing spaces)
+ignore_prefixes = Edited ,Viewed ,Ran command:,Created At:,Completed At:,Created file ,Stdout:,Stderr:
+
+
