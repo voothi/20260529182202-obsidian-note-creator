@@ -84,6 +84,9 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
             
     if not clean_task_name:
         clean_task_name = "Untitled Note"
+    else:
+        # Strip any leading ZID from the front of the task name to avoid duplication in slug
+        clean_task_name = re.sub(r'^\d{14}\s+', '', clean_task_name).strip()
         
     # Limit task name to first sentence if split is enabled
     if split_description:
@@ -93,6 +96,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
             
     safe_slug = sanitize_name(clean_task_name, slug_word_count)
     filename = f"{zid}-{safe_slug}"
+
     note_filepath = os.path.join(conversations_dir, f"{filename}.md")
     
     print(f"[*] Smart Mode - Found ZID: {zid} -> Slug: {safe_slug}")
