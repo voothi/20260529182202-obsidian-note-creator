@@ -292,6 +292,9 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         print("[Error] Could not locate '## MOC.' or '## Notes' in the conversation file.")
         return False
         
+    # Extract current MOC block
+    moc_block = content_lines[moc_start_idx + 1:notes_section_idx]
+    
     # Filter out new lines if they already exist as links in the conversation
     filtered_new_moc_lines = []
     full_content_str = "".join(content_lines)
