@@ -52,6 +52,32 @@ due:
 
 """
 
+def clean_task_name_formatting(task_name):
+    """
+    Cleans leading list markers, headers, and surrounding formatting (backticks, asterisks, underscores)
+    from a task name while preserving inner hyphens and underscores.
+    """
+    # 1. Strip leading list markers: e.g., "- [ ] ", "- ", "* ", "+ ", "1. "
+    task_name = re.sub(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s+', '', task_name)
+    # 2. Strip leading hashes: e.g., "### "
+    task_name = re.sub(r'^\s*#+\s+', '', task_name)
+    # 3. Strip surrounding backticks, asterisks, underscores
+    task_name = task_name.strip()
+    while True:
+        prev_name = task_name
+        # Strip backticks
+        if task_name.startswith('`') and task_name.endswith('`'):
+            task_name = task_name[1:-1].strip()
+        # Strip double asterisks/underscores
+        elif (task_name.startswith('**') and task_name.endswith('**')) or (task_name.startswith('__') and task_name.endswith('__')):
+            task_name = task_name[2:-2].strip()
+        # Strip single asterisks/underscores
+        elif (task_name.startswith('*') and task_name.endswith('*')) or (task_name.startswith('_') and task_name.endswith('_')):
+            task_name = task_name[1:-1].strip()
+        if task_name == prev_name:
+            break
+    return task_name
+
 def process_single_message_block(text, config, parent_title, dry_run=False, force_one_to_one=None):
     """
     Parses a single multi-line chat message, extracts any ZID, and creates a 1-to-1 note.
@@ -70,18 +96,49 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         
     zid = max(zids, key=int)
 
-    
-    # 2. Extract clean task name: first non-empty line that isn't just the ZID or command
+    # 2. Find the line that contains or starts with the resolved ZID to handle Antigravity prepended logs
     lines = text.splitlines()
-    clean_task_name = ""
-    for line in lines:
-        cleaned_line = line.strip()
-        if cleaned_line and cleaned_line != zid:
-            # Strip markdown formatting for the title
-            clean_task_name = re.sub(r'[`*_#\-]', '', cleaned_line).strip()
-            # If it's a "Ran command" line, clean it up slightly or use it
+    zid_line_idx = -1
+    zid_header_pattern = re.compile(rf'^\s*(?:[-*+]\s+)?(?:\d+\.\s+)?(?:\*\*|__)??{re.escape(zid)}\b')
+    
+    for idx, line in enumerate(lines):
+        if zid_header_pattern.match(line):
+            zid_line_idx = idx
             break
             
+    clean_task_name = ""
+    if zid_line_idx != -1:
+        # Check if the ZID line itself has additional text
+        zid_line = lines[zid_line_idx]
+        match_obj = zid_header_pattern.match(zid_line)
+        prefix_and_zid = match_obj.group(0)
+        remaining_text = zid_line[len(prefix_and_zid):].strip()
+        
+        # If there's remaining text on the ZID line, use it!
+        if remaining_text:
+            clean_task_name = clean_task_name_formatting(remaining_text)
+        else:
+            # Otherwise, scan downwards for the first non-empty line
+            for idx in range(zid_line_idx + 1, len(lines)):
+                line_content = lines[idx].strip()
+                if line_content:
+                    clean_task_name = clean_task_name_formatting(line_content)
+                    break
+    
+    # Precautionary fallback: if no ZID line was matched or no task name found,
+    # fall back to the first non-empty line of the block (excluding service logs if possible)
+    if not clean_task_name:
+        for line in lines:
+            cleaned_line = line.strip()
+            # Ignore common service log prefixes or standard ZID-only lines
+            if cleaned_line and cleaned_line != zid:
+                # Basic check to avoid service lines if there are other lines
+                is_service_line = any(cleaned_line.startswith(p) for p in ["Edited ", "Viewed ", "Ran command:"])
+                if is_service_line and len(lines) > 2:
+                    continue
+                clean_task_name = clean_task_name_formatting(cleaned_line)
+                break
+                
     if not clean_task_name:
         clean_task_name = "Untitled Note"
     else:
@@ -148,6 +205,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
             raw_text = match.group(3)
             
             clean_task_name, description_text = split_first_sentence(raw_text, split_description)
+            clean_task_name = clean_task_name_formatting(clean_task_name)
             note_description = raw_text.strip() if use_one_to_one else description_text
             
             safe_slug = sanitize_name(clean_task_name, slug_word_count)
@@ -181,6 +239,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 raw_text = simple_match.group(2)
                 
                 clean_task_name, description_text = split_first_sentence(raw_text, split_description)
+                clean_task_name = clean_task_name_formatting(clean_task_name)
                 note_description = raw_text.strip() if use_one_to_one else description_text
                 
                 safe_slug = sanitize_name(clean_task_name, slug_word_count)
