@@ -363,7 +363,11 @@ def main():
         vault_base = r"U:\voothi.vault"
         project_dir = os.path.join(vault_base, project_name)
         
-        if os.path.exists(project_dir) and os.path.isdir(project_dir):
+        # If the project folder exists, OR if auto_create_project is True:
+        if (os.path.exists(project_dir) and os.path.isdir(project_dir)) or config.get("auto_create_project", False):
+            if not os.path.exists(project_dir):
+                print(f"[+] Creating vault project directory: {project_dir} due to auto_create_project=True")
+                
             conversations_dir = os.path.join(project_dir, "conversations")
             
             # Auto-create conversations directory if it's missing

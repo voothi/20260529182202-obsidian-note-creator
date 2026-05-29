@@ -7,13 +7,14 @@ def get_config(config_path="config.ini"):
     """
     Loads configuration settings from config.ini, falling back to defaults if not found.
     """
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     if os.path.exists(config_path):
         config.read(config_path, encoding="utf-8")
     
     # Defaults
     conversations_dir = config.get("Obsidian", "conversations_dir", fallback=r"U:\voothi.vault\kardenwort-mpv\conversations")
     active_conversation = config.get("Obsidian", "active_conversation", fallback=r"U:\voothi.vault\kardenwort-mpv\conversations\20260529122032-conversation.md")
+    auto_create_project = config.getboolean("Obsidian", "auto_create_project", fallback=False)
     slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
     split_description = config.getboolean("Parser", "split_description", fallback=True)
     one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)
@@ -21,6 +22,7 @@ def get_config(config_path="config.ini"):
     return {
         "conversations_dir": conversations_dir,
         "active_conversation": active_conversation,
+        "auto_create_project": auto_create_project,
         "slug_word_count": slug_word_count,
         "split_description": split_description,
         "one_to_one": one_to_one
