@@ -52,7 +52,69 @@ due:
 
 """
 
+def process_single_message_block(text, config, parent_title, dry_run=False, force_one_to_one=None):
+    """
+    Parses a single multi-line chat message, extracts any ZID, and creates a 1-to-1 note.
+    """
+    conversations_dir = config["conversations_dir"]
+    slug_word_count = config["slug_word_count"]
+    split_description = config["split_description"]
+    use_one_to_one = force_one_to_one if force_one_to_one is not None else config.get("one_to_one", True)
+    created_date = datetime.now().strftime("%Y-%m-%d")
+    
+    # 1. Find all ZIDs in the text and select the chronologically latest (maximum value)
+    zids = re.findall(r'\b(\d{14})\b', text)
+    if not zids:
+        print("[!] No ZID found in the input block.")
+        return [], 0
+        
+    zid = max(zids, key=int)
+
+    
+    # 2. Extract clean task name: first non-empty line that isn't just the ZID or command
+    lines = text.splitlines()
+    clean_task_name = ""
+    for line in lines:
+        cleaned_line = line.strip()
+        if cleaned_line and cleaned_line != zid:
+            # Strip markdown formatting for the title
+            clean_task_name = re.sub(r'[`*_#\-]', '', cleaned_line).strip()
+            # If it's a "Ran command" line, clean it up slightly or use it
+            break
+            
+    if not clean_task_name:
+        clean_task_name = "Untitled Note"
+        
+    # Limit task name to first sentence if split is enabled
+    if split_description:
+        first_sentence, _ = split_first_sentence(clean_task_name, True)
+        if first_sentence:
+            clean_task_name = first_sentence
+            
+    safe_slug = sanitize_name(clean_task_name, slug_word_count)
+    filename = f"{zid}-{safe_slug}"
+    note_filepath = os.path.join(conversations_dir, f"{filename}.md")
+    
+    print(f"[*] Smart Mode - Found ZID: {zid} -> Slug: {safe_slug}")
+    
+    note_description = text.strip() if use_one_to_one else text.replace(zid, "").strip()
+    
+    if not dry_run:
+        # Prevent overwrite
+        if os.path.exists(note_filepath):
+            print(f"    [!] Note '{filename}.md' already exists. Skipping file creation.")
+        else:
+            note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
+            with open(note_filepath, "w", encoding="utf-8") as f:
+                f.write(note_content)
+            print(f"    [+] Created Note: {filename}.md")
+            
+    # Return formatted MOC link
+    link_line = f"- [[{filename}|{clean_task_name}]]\n"
+    return [link_line], 1
+
 def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_one=None):
+
     """
     Parses ZID lines, creates the matching markdown notes, and returns updated list lines.
     """
@@ -248,8 +310,18 @@ def main():
         print("[!] No lines to process.")
         sys.exit(0)
         
-    print(f"[*] Processing {len(lines_to_process)} input lines...")
-    updated_moc_lines, notes_created = process_zid_lines(lines_to_process, config, parent_title, args.dry_run, args.one_to_one)
+    # Check if this is a single message block rather than a batch ZID list
+    is_batch_list = all(ZID_LINE_REGEX.match(l) or SIMPLE_ZID_REGEX.match(l.strip()) or not l.strip() for l in lines_to_process)
+    
+    if not is_batch_list:
+        # Smart Mode: Process the entire clipboard text as a single note block
+        full_text = "".join(lines_to_process)
+        updated_moc_lines, notes_created = process_single_message_block(full_text, config, parent_title, args.dry_run, args.one_to_one)
+
+    else:
+        # Standard line-by-line list processing
+        updated_moc_lines, notes_created = process_zid_lines(lines_to_process, config, parent_title, args.dry_run, args.one_to_one)
+
     
     if notes_created > 0:
         # Extract and format only the valid list item wikilinks for MOC insertion
