@@ -465,19 +465,19 @@ created: {datetime.now().strftime("%Y-%m-%d")}
         updated_moc_lines, notes_created = process_zid_lines(lines_to_process, config, parent_title, args.dry_run, args.one_to_one)
 
     
-    if notes_created > 0:
-        # Extract and format only the valid list item wikilinks for MOC insertion
-        moc_links_only = []
-        for l in updated_moc_lines:
-            if "[[" in l:
-                stripped = l.strip()
-                if stripped.startswith("-") or stripped.startswith("*"):
-                    moc_links_only.append(l)
-                else:
-                    # Determine indentation
-                    indent = len(l) - len(l.lstrip())
-                    moc_links_only.append(" " * indent + "- " + stripped + "\n")
-                    
+    # Extract and format only the valid list item wikilinks for MOC insertion
+    moc_links_only = []
+    for l in updated_moc_lines:
+        if "[[" in l:
+            stripped = l.strip()
+            if stripped.startswith("-") or stripped.startswith("*"):
+                moc_links_only.append(l)
+            else:
+                # Determine indentation
+                indent = len(l) - len(l.lstrip())
+                moc_links_only.append(" " * indent + "- " + stripped + "\n")
+                
+    if moc_links_only:
         update_conversation_moc(config["active_conversation"], moc_links_only, args.dry_run)
         
         # Combine output links for clipboard or printing
