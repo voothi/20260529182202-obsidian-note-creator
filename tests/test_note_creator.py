@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note
 from utils import sanitize_name, split_first_sentence
+from utils import get_config
 
 class TestNoteCreator(unittest.TestCase):
     
@@ -422,6 +423,21 @@ Reviewed commit id.
                     if entry.is_file():
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
+
+    def test_get_config_supports_utf8_bom(self):
+        """
+        Verify config files with UTF-8 BOM are parsed correctly.
+        """
+        cfg_path = "mock_bom_config.ini"
+        try:
+            with open(cfg_path, "w", encoding="utf-8-sig") as f:
+                f.write("[Obsidian]\nconversations_dir = U:\\voothi.vault\\kardenwort-mpv\\conversations\n")
+            cfg = get_config(cfg_path)
+            self.assertIn("conversations_dir", cfg)
+            self.assertEqual(cfg["conversations_dir"], r"U:\voothi.vault\kardenwort-mpv\conversations")
+        finally:
+            if os.path.exists(cfg_path):
+                os.remove(cfg_path)
 
 if __name__ == '__main__':
     unittest.main()

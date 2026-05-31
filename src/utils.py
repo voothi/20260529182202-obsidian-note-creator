@@ -9,7 +9,9 @@ def get_config(config_path="config.ini"):
     """
     config = configparser.ConfigParser(interpolation=None)
     if os.path.exists(config_path):
-        config.read(config_path, encoding="utf-8")
+        # Support UTF-8 config files with or without BOM.
+        with open(config_path, "r", encoding="utf-8-sig") as f:
+            config.read_file(f)
     
     # Defaults
     conversations_dir = config.get("Obsidian", "conversations_dir", fallback=r"U:\voothi.vault\kardenwort-mpv\conversations")
