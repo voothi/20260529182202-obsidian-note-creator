@@ -500,6 +500,47 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         
     return True
 
+def initialize_active_conversation(conversations_dir):
+    """
+    Creates a template active conversation note in conversations_dir and returns its path.
+    """
+    now_zid = datetime.now().strftime("%Y%m%d%H%M%S")
+    new_conv_filename = f"{now_zid}-conversation.md"
+    new_conv_path = os.path.join(conversations_dir, new_conv_filename)
+    
+    conv_content = f"""---
+aliases:
+  - Conversation {datetime.now().strftime("%Y-%m-%d")}
+tags:
+  - conversation
+created: {datetime.now().strftime("%Y-%m-%d")}
+---
+
+# Conversation {datetime.now().strftime("%Y-%m-%d")}
+
+## MOC.
+
+
+
+## Notes
+
+"""
+    with open(new_conv_path, "w", encoding="utf-8") as f:
+        f.write(conv_content)
+        
+    print(f"[+] Initialized active conversation file: {new_conv_filename}")
+    return new_conv_path
+
+def normalize_workspace_name(raw_workspace):
+    """
+    Normalizes workspace titles/slugs into a vault project folder name.
+    """
+    workspace_raw = raw_workspace.strip()
+    workspace_raw = re.sub(r'^\d{14}[-_\s]*', '', workspace_raw)
+    workspace_raw = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
+    workspace_raw = re.sub(r'\.md$', '', workspace_raw, flags=re.IGNORECASE).strip()
+    return workspace_raw
+
 def main():
     parser = argparse.ArgumentParser(
         description="Obsidian Note Creator Utility - Converts ZID text logs into standalone notes with wikilinks."
@@ -551,15 +592,27 @@ def main():
     # 1. Prioritize focused active workspace from args.workspace first (if it exists on disk)
     project_name = None
     if args.workspace:
-        workspace_raw = args.workspace.strip()
-        workspace_raw = re.sub(r'^\d{14}[-_\s]*', '', workspace_raw)
-        workspace_raw = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
-        
         vault_base = r"U:\voothi.vault"
-        potential_dir = os.path.join(vault_base, workspace_raw)
-        if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
-            project_name = workspace_raw
-            print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
+        workspace_tokens = re.findall(r'\d{14}-[\w-]+', args.workspace)
+        
+        # VSCode titles often contain both file and workspace slugs:
+        # "<file-zid-slug>.md - <workspace-zid-slug> - Visual Studio Code".
+        # Prefer the rightmost token first, then fall back to raw input.
+        candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
+        candidate_tokens.append(args.workspace)
+        
+        seen_candidates = set()
+        for candidate in candidate_tokens:
+            normalized = normalize_workspace_name(candidate)
+            if not normalized or normalized in seen_candidates:
+                continue
+                
+            seen_candidates.add(normalized)
+            potential_dir = os.path.join(vault_base, normalized)
+            if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
+                project_name = normalized
+                print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
+                break
             
     # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
     if not project_name:
@@ -587,40 +640,25 @@ def main():
                 
             config["conversations_dir"] = conversations_dir
             latest_conv = discover_active_conversation(conversations_dir)
-            
             if not latest_conv:
-                # If no conversation file exists in this directory, initialize one!
-                now_zid = datetime.now().strftime("%Y%m%d%H%M%S")
-                new_conv_filename = f"{now_zid}-conversation.md"
-                new_conv_path = os.path.join(conversations_dir, new_conv_filename)
-                
-                # Create a template active conversation MOC note
-                conv_content = f"""---
-aliases:
-  - Conversation {datetime.now().strftime("%Y-%m-%d")}
-tags:
-  - conversation
-created: {datetime.now().strftime("%Y-%m-%d")}
----
-
-# Conversation {datetime.now().strftime("%Y-%m-%d")}
-
-## MOC.
-
-
-
-## Notes
-
-"""
-                with open(new_conv_path, "w", encoding="utf-8") as f:
-                    f.write(conv_content)
-                print(f"[+] Initialized active conversation file: {new_conv_filename}")
-                latest_conv = new_conv_path
+                latest_conv = initialize_active_conversation(conversations_dir)
                 
             config["active_conversation"] = latest_conv
             print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
         else:
             print(f"[!] Discovered project path '{project_dir}' does not exist. Falling back to default config.")
+
+    # Ensure fallback directories/files are valid when using default config.
+    fallback_conversations = config["conversations_dir"]
+    if not os.path.exists(fallback_conversations):
+        os.makedirs(fallback_conversations, exist_ok=True)
+        print(f"[+] Created fallback conversations directory: {fallback_conversations}")
+        
+    if not os.path.exists(config["active_conversation"]):
+        latest_conv = discover_active_conversation(fallback_conversations)
+        if not latest_conv:
+            latest_conv = initialize_active_conversation(fallback_conversations)
+        config["active_conversation"] = latest_conv
             
     parent_file = os.path.basename(config["active_conversation"])
     parent_title, _ = os.path.splitext(parent_file)
@@ -669,4 +707,3 @@ created: {datetime.now().strftime("%Y-%m-%d")}
 
 if __name__ == "__main__":
     main()
-
