@@ -18,9 +18,7 @@ ensure_root_note = true
 ensure_active_conversation = true
 
 # Optional template used only when root.md is missing. Leave empty for built-in minimal template.
-root_note_template_path = 
-
-# Tooltip display duration in milliseconds (e.g. 4000 for 4 seconds).
+root_note_template_path = templates/root.md# Tooltip display duration in milliseconds (e.g. 4000 for 4 seconds).
 # If empty or 0, tooltips are disabled completely.
 tooltip = 4000
 
@@ -42,6 +40,7 @@ one_to_one = True
 
 # Comma-separated list of line prefixes to ignore during ZID and title scanning (preserves trailing spaces)
 ignore_prefixes = Edited ,Viewed ,Ran command:,Created At:,Completed At:,Created file ,Stdout:,Stderr:
+
 
 
 

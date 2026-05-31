@@ -19,7 +19,10 @@ def get_config(config_path="config.ini"):
     auto_create_project = config.getboolean("Obsidian", "auto_create_project", fallback=False)
     ensure_root_note = config.getboolean("Obsidian", "ensure_root_note", fallback=True)
     ensure_active_conversation = config.getboolean("Obsidian", "ensure_active_conversation", fallback=True)
-    root_note_template_path = config.get("Obsidian", "root_note_template_path", fallback="")
+    root_note_template_path = config.get("Obsidian", "root_note_template_path", fallback="templates/root.md")
+    if root_note_template_path and not os.path.isabs(root_note_template_path):
+        config_dir = os.path.dirname(os.path.abspath(config_path))
+        root_note_template_path = os.path.abspath(os.path.join(config_dir, root_note_template_path))
     slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
     split_description = config.getboolean("Parser", "split_description", fallback=True)
     one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)

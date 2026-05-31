@@ -454,5 +454,24 @@ Reviewed commit id.
             if os.path.exists(cfg_path):
                 os.remove(cfg_path)
 
+    def test_get_config_resolves_relative_root_template_path(self):
+        """
+        Verify relative root_note_template_path is resolved against config directory.
+        """
+        cfg_dir = "mock_cfg_dir"
+        cfg_path = os.path.join(cfg_dir, "config.ini")
+        os.makedirs(cfg_dir, exist_ok=True)
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                f.write("[Obsidian]\nroot_note_template_path = templates/root.md\n")
+            cfg = get_config(cfg_path)
+            self.assertTrue(cfg["root_note_template_path"].endswith(os.path.join("templates", "root.md")))
+            self.assertTrue(os.path.isabs(cfg["root_note_template_path"]))
+        finally:
+            if os.path.exists(cfg_path):
+                os.remove(cfg_path)
+            if os.path.exists(cfg_dir):
+                os.rmdir(cfg_dir)
+
 if __name__ == '__main__':
     unittest.main()
