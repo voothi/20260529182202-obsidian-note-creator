@@ -63,8 +63,19 @@ def clean_task_name_formatting(task_name):
     task_name = re.sub(r'^\s*#+\s+', '', task_name)
     # 3. Strip backticks and asterisks anywhere
     task_name = task_name.replace('`', '').replace('*', '')
-    # 3.5. Strip markdown links: [Text](URL) -> Text
+    
+    # 3.5. Strip markdown images and links
+    # Remove markdown images entirely: e.g., "![alt text](url)"
+    task_name = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', task_name)
+    # Strip markdown links to their text: e.g., "[Text](URL)" -> "Text"
     task_name = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', task_name)
+    # Remove Obsidian image/attachment embeds entirely: e.g., "![[image.png]]"
+    task_name = re.sub(r'!\[\[[^\]]+\]\]', '', task_name)
+    # Strip Obsidian wikilinks with alias/display text: e.g., "[[Target|Display Text]]" -> "Display Text"
+    task_name = re.sub(r'\[\[[^\]|]+\|([^\]]+)\]\]', r'\1', task_name)
+    # Strip Obsidian wikilinks: e.g., "[[Target]]" -> "Target"
+    task_name = re.sub(r'\[\[([^\]]+)\]\]', r'\1', task_name)
+    
     # 4. Strip surrounding underscores if they format the entire task name
     while True:
         prev_name = task_name
@@ -74,8 +85,9 @@ def clean_task_name_formatting(task_name):
             task_name = task_name[1:-1].strip()
         if task_name == prev_name:
             break
-    # 5. Strip leading/trailing spaces
-    task_name = task_name.strip()
+            
+    # 5. Collapse consecutive spaces and strip leading/trailing spaces
+    task_name = re.sub(r'\s+', ' ', task_name).strip()
     return task_name
 
 def find_existing_note_by_zid(conversations_dir, zid):

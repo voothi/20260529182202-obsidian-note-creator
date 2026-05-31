@@ -41,6 +41,12 @@ class TestNoteCreator(unittest.TestCase):
         
         # Markdown links stripping
         self.assertEqual(clean_task_name_formatting("Updated [AGENTS.md](file:///path/to/AGENTS.md) here."), "Updated AGENTS.md here.")
+        
+        # Wikilinks and image embeds stripping
+        self.assertEqual(clean_task_name_formatting("Task with [[Some Note]] here."), "Task with Some Note here.")
+        self.assertEqual(clean_task_name_formatting("Task with [[Some Note|custom display]] here."), "Task with custom display here.")
+        self.assertEqual(clean_task_name_formatting("Task with ![[pasted-image.png]] here."), "Task with here.")
+        self.assertEqual(clean_task_name_formatting("Task with ![alt text](http://example.com/image.png) here."), "Task with here.")
 
     def test_sanitize_name(self):
         """
