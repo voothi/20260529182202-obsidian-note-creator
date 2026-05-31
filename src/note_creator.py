@@ -548,20 +548,26 @@ def main():
         print("[!] No lines to process.")
         sys.exit(0)
 
-    # Smart Discovery - Try to infer the vault project from paths like "U:\voothi.vault\<project>\conversations\" in the input text first!
-    full_input_text = "".join(lines_to_process)
-    vault_path_match = re.search(r'U:\\voothi\.vault\\([\w-]+)\\conversations\\', full_input_text, re.IGNORECASE)
-    inferred_project = None
-    if vault_path_match:
-        inferred_project = vault_path_match.group(1).strip()
-        print(f"[*] Smart Discovery - Inferred project '{inferred_project}' from vault path in input text.")
-
-    project_name = inferred_project if inferred_project else None
-    if not project_name and args.workspace:
-        # Strip any leading ZID and trailing info to get the project directory name
+    # 1. Prioritize focused active workspace from args.workspace first (if it exists on disk)
+    project_name = None
+    if args.workspace:
         workspace_raw = args.workspace.strip()
         workspace_raw = re.sub(r'^\d{14}[-_\s]*', '', workspace_raw)
-        project_name = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
+        workspace_raw = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
+        
+        vault_base = r"U:\voothi.vault"
+        potential_dir = os.path.join(vault_base, workspace_raw)
+        if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
+            project_name = workspace_raw
+            print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
+            
+    # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
+    if not project_name:
+        full_input_text = "".join(lines_to_process)
+        vault_path_match = re.search(r'U:\\voothi\.vault\\([\w-]+)\\conversations\\', full_input_text, re.IGNORECASE)
+        if vault_path_match:
+            project_name = vault_path_match.group(1).strip()
+            print(f"[*] Smart Discovery - Inferred project '{project_name}' from vault path in input text.")
 
     if project_name:
         vault_base = r"U:\voothi.vault"
