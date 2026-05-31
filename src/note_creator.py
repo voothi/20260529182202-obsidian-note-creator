@@ -516,12 +516,54 @@ def main():
     args = parser.parse_args()
     config = get_config(args.config)
     
-    if args.workspace:
-        # Strip any leading ZID and trailing info to get the project directory name
-        project_name = args.workspace.strip()
-        project_name = re.sub(r'^\d{14}[-_\s]*', '', project_name)
-        project_name = re.sub(r'\s*\(Workspace\).*', '', project_name).strip()
+    lines_to_process = []
+    
+    if args.clipboard:
+        if not PYPERCLIP_AVAILABLE:
+            print("[Error] Pyperclip is not installed. Clipboard options are unavailable.")
+            sys.exit(1)
+        clipboard_content = pyperclip.paste()
+        if clipboard_content:
+            # Split text by newlines
+            lines_to_process = clipboard_content.splitlines(keepends=True)
+            print("[*] Successfully loaded text from system clipboard.")
+        else:
+            print("[!] Clipboard is empty.")
+            sys.exit(0)
+    elif args.text:
+        lines_to_process = [args.text + "\n"]
+    elif args.input:
+        if os.path.exists(args.input):
+            with open(args.input, "r", encoding="utf-8") as f:
+                lines_to_process = f.readlines()
+        else:
+            print(f"[Error] Input file '{args.input}' not found.")
+            sys.exit(1)
+    else:
+        # Fallback to stdin if no arguments are provided
+        print("[*] No input source specified. Reading from standard input (press Ctrl+Z then Enter on Windows to finish):")
+        lines_to_process = sys.stdin.readlines()
         
+    if not lines_to_process:
+        print("[!] No lines to process.")
+        sys.exit(0)
+
+    # Smart Discovery - Try to infer the vault project from paths like "U:\voothi.vault\<project>\conversations\" in the input text first!
+    full_input_text = "".join(lines_to_process)
+    vault_path_match = re.search(r'U:\\voothi\.vault\\([\w-]+)\\conversations\\', full_input_text, re.IGNORECASE)
+    inferred_project = None
+    if vault_path_match:
+        inferred_project = vault_path_match.group(1).strip()
+        print(f"[*] Smart Discovery - Inferred project '{inferred_project}' from vault path in input text.")
+
+    project_name = inferred_project if inferred_project else None
+    if not project_name and args.workspace:
+        # Strip any leading ZID and trailing info to get the project directory name
+        workspace_raw = args.workspace.strip()
+        workspace_raw = re.sub(r'^\d{14}[-_\s]*', '', workspace_raw)
+        project_name = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
+
+    if project_name:
         vault_base = r"U:\voothi.vault"
         project_dir = os.path.join(vault_base, project_name)
         
@@ -573,41 +615,9 @@ created: {datetime.now().strftime("%Y-%m-%d")}
             print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
         else:
             print(f"[!] Discovered project path '{project_dir}' does not exist. Falling back to default config.")
-    
+            
     parent_file = os.path.basename(config["active_conversation"])
     parent_title, _ = os.path.splitext(parent_file)
-    
-    lines_to_process = []
-    
-    if args.clipboard:
-        if not PYPERCLIP_AVAILABLE:
-            print("[Error] Pyperclip is not installed. Clipboard options are unavailable.")
-            sys.exit(1)
-        clipboard_content = pyperclip.paste()
-        if clipboard_content:
-            # Split text by newlines
-            lines_to_process = clipboard_content.splitlines(keepends=True)
-            print("[*] Successfully loaded text from system clipboard.")
-        else:
-            print("[!] Clipboard is empty.")
-            sys.exit(0)
-    elif args.text:
-        lines_to_process = [args.text + "\n"]
-    elif args.input:
-        if os.path.exists(args.input):
-            with open(args.input, "r", encoding="utf-8") as f:
-                lines_to_process = f.readlines()
-        else:
-            print(f"[Error] Input file '{args.input}' not found.")
-            sys.exit(1)
-    else:
-        # Fallback to stdin if no arguments are provided
-        print("[*] No input source specified. Reading from standard input (press Ctrl+Z then Enter on Windows to finish):")
-        lines_to_process = sys.stdin.readlines()
-        
-    if not lines_to_process:
-        print("[!] No lines to process.")
-        sys.exit(0)
         
     # Check if this is a single message block rather than a batch ZID list
     is_batch_list = all(ZID_LINE_REGEX.match(l) or SIMPLE_ZID_REGEX.match(l.strip()) or not l.strip() for l in lines_to_process)
