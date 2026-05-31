@@ -236,5 +236,66 @@ I have successfully updated AGENTS.md to add a rule preventing agents from savin
             if os.path.exists(mock_dir):
                 os.rmdir(mock_dir)
 
+    def test_description_preserves_uncleaned_link_when_title_differs(self):
+        """
+        Verify that if the title differs from the alias/cleaned title (due to link stripping),
+        the original uncleaned version containing the link is written in the Description.
+        """
+        mock_dir = "mock_test_desc_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        config = {
+            "conversations_dir": mock_dir,
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 10,
+            "split_description": True,
+            "one_to_one": True,
+            "ignore_prefixes": []
+        }
+        
+        try:
+            # Case 1: Smart Mode (single message block) with a link
+            text = """20260531165012 Check command ![[20260531165230-pasted-image.png]]"""
+            links, count = process_single_message_block(
+                text, config, parent_title="test-conversation", dry_run=False
+            )
+            
+            # The file should have been created with slug-ified filename
+            filename = "20260531165012-check-command.md"
+            filepath = os.path.join(mock_dir, filename)
+            self.assertTrue(os.path.exists(filepath))
+            
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            # Verify alias and title are cleaned (no link)
+            self.assertIn("aliases: \n  - Check command\n", content)
+            self.assertIn("# Check command\n", content)
+            # Verify description has the original text with link
+            self.assertIn("## Description\n\nCheck command ![[20260531165230-pasted-image.png]]", content)
+            
+            # Case 2: Batch list lines with a link
+            os.remove(filepath)
+            lines = ["- 20260531165012 Check command ![[20260531165230-pasted-image.png]]\n"]
+            updated_lines, notes_created = process_zid_lines(
+                lines, config, parent_title="test-conversation", dry_run=False
+            )
+            
+            self.assertTrue(os.path.exists(filepath))
+            with open(filepath, "r", encoding="utf-8") as f:
+                content_batch = f.read()
+                
+            self.assertIn("aliases: \n  - Check command\n", content_batch)
+            self.assertIn("# Check command\n", content_batch)
+            self.assertIn("## Description\n\nCheck command ![[20260531165230-pasted-image.png]]", content_batch)
+            
+        finally:
+            # Clean up
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
 if __name__ == '__main__':
     unittest.main()

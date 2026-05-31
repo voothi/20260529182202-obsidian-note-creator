@@ -181,6 +181,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         return [link_line], 0
         
     clean_task_name = ""
+    raw_task_name = ""
     if zid_line_idx != -1:
         # Check if the ZID line itself has additional text
         zid_line = lines[zid_line_idx]
@@ -192,12 +193,14 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         
         # If there's remaining text on the ZID line, use it!
         if remaining_text:
+            raw_task_name = remaining_text
             clean_task_name = clean_task_name_formatting(remaining_text)
         else:
             # Otherwise, scan downwards for the first non-empty line
             for idx in range(zid_line_idx + 1, len(lines)):
                 line_content = lines[idx].strip()
                 if line_content:
+                    raw_task_name = line_content
                     clean_task_name = clean_task_name_formatting(line_content)
                     break
     else:
@@ -208,6 +211,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
                 is_service_line = any(cleaned_line.startswith(p) for p in service_prefixes)
                 if is_service_line and len(lines) > 2:
                     continue
+                raw_task_name = cleaned_line
                 clean_task_name = clean_task_name_formatting(cleaned_line)
                 break
                 
@@ -217,11 +221,18 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         # Strip any leading ZID from the front of the task name to avoid duplication in slug
         clean_task_name = re.sub(r'^\d{14}\s+', '', clean_task_name).strip()
         
+    if raw_task_name:
+        raw_task_name = re.sub(r'^\d{14}\s+', '', raw_task_name).strip()
+        
     # Limit task name to first sentence if split is enabled
     if split_description:
         first_sentence, _ = split_first_sentence(clean_task_name, True)
         if first_sentence:
             clean_task_name = first_sentence
+            
+        raw_first_sentence, _ = split_first_sentence(raw_task_name, True)
+        if raw_first_sentence:
+            raw_task_name = raw_first_sentence
             
     safe_slug = sanitize_name(clean_task_name, slug_word_count)
     filename = f"{zid}-{safe_slug}"
@@ -232,9 +243,21 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     
     _, remaining_desc = split_first_sentence(text.replace(zid, "").strip(), split_description)
     if use_one_to_one:
-        note_description = "" if not remaining_desc.strip() else text.strip()
+        if not remaining_desc.strip():
+            if clean_task_name != raw_task_name:
+                note_description = text.replace(zid, "").strip()
+            else:
+                note_description = ""
+        else:
+            note_description = text.replace(zid, "").strip()
     else:
-        note_description = remaining_desc.strip()
+        if clean_task_name != raw_task_name:
+            if remaining_desc.strip():
+                note_description = f"{raw_task_name}\n\n{remaining_desc.strip()}"
+            else:
+                note_description = raw_task_name
+        else:
+            note_description = remaining_desc.strip()
     
     if not dry_run:
         # Prevent overwrite
@@ -287,9 +310,25 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 updated_lines.append(f"{prefix}[[{filename}|{clean_task_name}]]\n")
                 continue
                 
-            clean_task_name, description_text = split_first_sentence(raw_text, split_description)
-            clean_task_name = clean_task_name_formatting(clean_task_name)
-            note_description = "" if (use_one_to_one and not description_text.strip()) else (raw_text.strip() if use_one_to_one else description_text)
+            raw_task_name, description_text = split_first_sentence(raw_text, split_description)
+            clean_task_name = clean_task_name_formatting(raw_task_name)
+            
+            if use_one_to_one:
+                if not description_text.strip():
+                    if clean_task_name != raw_task_name:
+                        note_description = raw_text.strip()
+                    else:
+                        note_description = ""
+                else:
+                    note_description = raw_text.strip()
+            else:
+                if clean_task_name != raw_task_name:
+                    if description_text.strip():
+                        note_description = f"{raw_task_name}\n\n{description_text.strip()}"
+                    else:
+                        note_description = raw_task_name
+                else:
+                    note_description = description_text.strip()
             
             safe_slug = sanitize_name(clean_task_name, slug_word_count)
             filename = f"{zid}-{safe_slug}"
@@ -328,9 +367,25 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                     updated_lines.append(f"[[{filename}|{clean_task_name}]]\n")
                     continue
                     
-                clean_task_name, description_text = split_first_sentence(raw_text, split_description)
-                clean_task_name = clean_task_name_formatting(clean_task_name)
-                note_description = "" if (use_one_to_one and not description_text.strip()) else (raw_text.strip() if use_one_to_one else description_text)
+                raw_task_name, description_text = split_first_sentence(raw_text, split_description)
+                clean_task_name = clean_task_name_formatting(raw_task_name)
+                
+                if use_one_to_one:
+                    if not description_text.strip():
+                        if clean_task_name != raw_task_name:
+                            note_description = raw_text.strip()
+                        else:
+                            note_description = ""
+                    else:
+                        note_description = raw_text.strip()
+                else:
+                    if clean_task_name != raw_task_name:
+                        if description_text.strip():
+                            note_description = f"{raw_task_name}\n\n{description_text.strip()}"
+                        else:
+                            note_description = raw_task_name
+                    else:
+                        note_description = description_text.strip()
                 
                 safe_slug = sanitize_name(clean_task_name, slug_word_count)
                 filename = f"{zid}-{safe_slug}"
