@@ -722,54 +722,68 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
 
     # Treat as existing when link appears anywhere on a line inside the MOC section
     moc_end = notes_idx if notes_idx != -1 else len(lines)
+    already_exists = False
     for line in lines[moc_idx + 1:moc_end]:
         if f"[[{conv_filename}|" in line or f"[[{conv_filename}]]" in line:
-            return False
+            already_exists = True
+            break
 
-    insert_pos = (moc_idx + 1) if notes_idx == -1 else notes_idx
-    insert_line = link_line
+    updated = list(lines)
+    if not already_exists:
+        insert_pos = (moc_idx + 1) if notes_idx == -1 else notes_idx
+        insert_line = link_line
 
-    if preferred_parent:
-        parent_pattern = re.compile(r'\[\[' + re.escape(preferred_parent) + r'(?:\|[^\]]*)?\]\]')
-        for idx in range(moc_idx + 1, moc_end):
-            if parent_pattern.search(lines[idx]):
-                parent_indent_match = re.match(r'^(\s*)', lines[idx])
-                parent_indent = len(parent_indent_match.group(1)) if parent_indent_match else 0
-                child_indent = parent_indent + 4
-                insert_line = f"{' ' * child_indent}- [[{conv_filename}|Conversation]]\n"
+        if preferred_parent:
+            parent_pattern = re.compile(r'\[\[' + re.escape(preferred_parent) + r'(?:\|[^\]]*)?\]\]')
+            for idx in range(moc_idx + 1, moc_end):
+                if parent_pattern.search(lines[idx]):
+                    parent_indent_match = re.match(r'^(\s*)', lines[idx])
+                    parent_indent = len(parent_indent_match.group(1)) if parent_indent_match else 0
+                    child_indent = parent_indent + 4
+                    insert_line = f"{' ' * child_indent}- [[{conv_filename}|Conversation]]\n"
 
-                insert_pos = idx + 1
-                while insert_pos < moc_end:
-                    current_line = lines[insert_pos]
-                    if not current_line.strip():
-                        break
-                    current_indent_match = re.match(r'^(\s*)', current_line)
-                    current_indent = len(current_indent_match.group(1)) if current_indent_match else 0
-                    if current_indent <= parent_indent:
-                        break
-                    insert_pos += 1
-                break
+                    insert_pos = idx + 1
+                    while insert_pos < moc_end:
+                        current_line = lines[insert_pos]
+                        if not current_line.strip():
+                            break
+                        current_indent_match = re.match(r'^(\s*)', current_line)
+                        current_indent = len(current_indent_match.group(1)) if current_indent_match else 0
+                        if current_indent <= parent_indent:
+                            break
+                        insert_pos += 1
+                    break
 
-    updated = lines[:insert_pos] + [insert_line] + lines[insert_pos:]
+        updated = lines[:insert_pos] + [insert_line] + lines[insert_pos:]
 
-    # Keep MOC visually isolated with one empty line after header and before Notes.
+    # Keep MOC visually isolated with exactly one empty line after header and before Notes.
     moc_idx_new, notes_idx_new = _extract_moc_bounds(updated)
     if moc_idx_new != -1:
-        if moc_idx_new + 1 >= len(updated) or updated[moc_idx_new + 1].strip() != "":
-            updated.insert(moc_idx_new + 1, "\n")
+        first_after = moc_idx_new + 1
+        while first_after < len(updated) and updated[first_after].strip() == "":
+            del updated[first_after]
+        updated.insert(first_after, "\n")
 
         moc_idx_new, notes_idx_new = _extract_moc_bounds(updated)
         if notes_idx_new != -1:
-            if notes_idx_new - 1 < 0 or updated[notes_idx_new - 1].strip() != "":
-                updated.insert(notes_idx_new, "\n")
+            while notes_idx_new - 1 >= 0 and updated[notes_idx_new - 1].strip() == "":
+                del updated[notes_idx_new - 1]
+                notes_idx_new -= 1
+            updated.insert(notes_idx_new, "\n")
 
     if dry_run:
-        print(f"[Dry-run] Would add conversation link to root MOC: {conv_filename}")
+        if not already_exists:
+            print(f"[Dry-run] Would add conversation link to root MOC: {conv_filename}")
+        else:
+            print("[Dry-run] Would normalize root MOC spacing.")
         return True
 
     with open(root_path, "w", encoding="utf-8") as f:
         f.writelines(updated)
-    print(f"[+] Added conversation link to root MOC: {conv_filename}")
+    if not already_exists:
+        print(f"[+] Added conversation link to root MOC: {conv_filename}")
+    else:
+        print("[+] Normalized root MOC spacing.")
     return True
 
 def normalize_workspace_name(raw_workspace):

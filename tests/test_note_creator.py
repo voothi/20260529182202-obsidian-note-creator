@@ -539,7 +539,7 @@ Reviewed commit id.
             changed_first = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
             changed_second = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
             self.assertTrue(changed_first)
-            self.assertFalse(changed_second)
+            self.assertTrue(changed_second)
 
             with open(root_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -751,6 +751,38 @@ Reviewed commit id.
             notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
             self.assertEqual(lines[moc_idx + 1].strip(), "")
             self.assertEqual(lines[notes_idx - 1].strip(), "")
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
+    def test_ensure_root_moc_normalizes_spacing_when_link_already_exists(self):
+        """
+        Verify spacing is normalized even if the conversation link already exists.
+        """
+        mock_dir = "mock_root_spacing_existing_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        conv_path = os.path.join(mock_dir, "20260530001202-conversation.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write("# root\n\n## MOC.\n- [[20260530001202-conversation|Conversation]]\n## Notes\n")
+            with open(conv_path, "w", encoding="utf-8") as f:
+                f.write("# Conversation\n")
+
+            changed = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
+            self.assertTrue(changed)
+
+            with open(root_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+            self.assertNotEqual(lines[moc_idx + 2].strip(), "")
+            self.assertEqual("".join(lines).count("[[20260530001202-conversation|Conversation]]"), 1)
         finally:
             if os.path.exists(mock_dir):
                 for entry in os.scandir(mock_dir):
