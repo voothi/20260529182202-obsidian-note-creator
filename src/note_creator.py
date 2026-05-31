@@ -516,24 +516,147 @@ def render_template(template_path="", fallback_content="", variables=None):
         content = content.replace(f"{{{key}}}", value)
     return content
 
-def initialize_active_conversation(conversations_dir, template_path=""):
+def _parse_moc_parent_map(lines, source_name):
+    """
+    Parse markdown lines and build child -> direct parent links based on MOC indentation/link order.
+    Mirrors the parent-stack behavior used by the Obsidian sync engine.
+    """
+    parent_map = {}
+    parent_stack = []
+    last_conversation_parent = None
+
+    for line in lines:
+        if not line.strip():
+            continue
+
+        indent_match = re.match(r'^(\s*)', line)
+        current_indent = len(indent_match.group(1)) if indent_match else 0
+        link_matches = re.findall(r'\[\[([^\]|]+)(?:\|[^\]]*)?\]\]', line)
+        if not link_matches:
+            continue
+
+        while parent_stack and parent_stack[-1]["indent"] >= current_indent:
+            parent_stack.pop()
+
+        current_parent = parent_stack[-1]["name"] if parent_stack else source_name
+        last_child_name = ""
+
+        for child_name in link_matches:
+            if child_name == source_name:
+                continue
+            if child_name not in parent_map:
+                parent_map[child_name] = []
+            if current_parent not in parent_map[child_name]:
+                parent_map[child_name].append(current_parent)
+
+            if child_name.endswith("-conversation"):
+                last_conversation_parent = current_parent
+
+            current_parent = child_name
+            last_child_name = child_name
+
+        if last_child_name:
+            parent_stack.append({"indent": current_indent, "name": last_child_name})
+
+    return parent_map, last_conversation_parent
+
+def _extract_moc_bounds(lines):
+    moc_idx = -1
+    notes_idx = -1
+    for idx, line in enumerate(lines):
+        if line.strip() == "## MOC.":
+            moc_idx = idx
+        elif line.strip() == "## Notes" and moc_idx != -1:
+            notes_idx = idx
+            break
+    return moc_idx, notes_idx
+
+def resolve_conversation_up_parents_from_root(root_path, conversation_filename_no_ext):
+    """
+    Resolve direct parents for a conversation based on root.md MOC section.
+    Falls back to the most recent conversation parent in root, then to root itself.
+    """
+    source_name = os.path.splitext(os.path.basename(root_path))[0] if root_path else "root"
+    if not root_path or not os.path.exists(root_path):
+        return [source_name]
+
+    with open(root_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    moc_idx, notes_idx = _extract_moc_bounds(lines)
+    if moc_idx == -1:
+        return [source_name]
+
+    moc_end = notes_idx if notes_idx != -1 else len(lines)
+    moc_lines = lines[moc_idx + 1:moc_end]
+    parent_map, last_conversation_parent = _parse_moc_parent_map(moc_lines, source_name)
+
+    parents = list(parent_map.get(conversation_filename_no_ext, []))
+    if not parents and last_conversation_parent:
+        parents = [last_conversation_parent]
+    if not parents:
+        parents = [source_name]
+    return parents
+
+def _format_up_lines(parents):
+    unique_parents = []
+    for parent in parents:
+        if parent and parent not in unique_parents:
+            unique_parents.append(parent)
+    return "\n".join([f'  - "[[{parent}]]"' for parent in unique_parents])
+
+def _apply_up_block(content, up_lines):
+    """
+    Replace or insert the frontmatter up block with provided YAML list lines.
+    """
+    new_up_block = f"up:\n{up_lines}"
+    if "{UP_LINES}" in content:
+        content = content.replace("{UP_LINES}", up_lines)
+
+    up_regex = re.compile(r'^up:.*(?:\r?\n\s+-.*)*', re.MULTILINE)
+    if up_regex.search(content):
+        return up_regex.sub(new_up_block, content, count=1)
+
+    if content.startswith("---"):
+        return re.sub(r'^---\s*(\r?\n)', f"---\n{new_up_block}\n", content, count=1)
+    return content
+
+def initialize_active_conversation(conversations_dir, template_path="", root_path=""):
     """
     Creates a template active conversation note in conversations_dir and returns its path.
     """
     now_zid = datetime.now().strftime("%Y%m%d%H%M%S")
     new_conv_filename = f"{now_zid}-conversation.md"
     new_conv_path = os.path.join(conversations_dir, new_conv_filename)
+    new_conv_basename = os.path.splitext(new_conv_filename)[0]
+    resolved_root_path = root_path or os.path.join(conversations_dir, "root.md")
     
     created_date = datetime.now().strftime("%Y-%m-%d")
+    up_parents = resolve_conversation_up_parents_from_root(resolved_root_path, new_conv_basename)
+    up_lines = _format_up_lines(up_parents)
     conv_fallback = f"""---
 aliases:
   - Conversation {created_date}
-tags:
-  - conversation
+up:
+{up_lines}
+type:
+status:
+down:
+prev:
+next:
+same:
+project:
+area:
+tags: []
 created: {created_date}
+due:
 ---
 
 # Conversation {created_date}
+
+## Description
+
+
 
 ## MOC.
 
@@ -545,8 +668,9 @@ created: {created_date}
     conv_content = render_template(
         template_path=template_path,
         fallback_content=conv_fallback,
-        variables={"ZID": now_zid, "CREATED_DATE": created_date}
+        variables={"ZID": now_zid, "CREATED_DATE": created_date, "UP_LINES": up_lines}
     )
+    conv_content = _apply_up_block(conv_content, up_lines)
     with open(new_conv_path, "w", encoding="utf-8") as f:
         f.write(conv_content)
         
@@ -577,7 +701,7 @@ def ensure_root_note(conversations_dir, template_path="", dry_run=False):
     print(f"[+] Created root note: {root_path}")
     return root_path, True
 
-def ensure_root_moc_contains_conversation(root_path, active_conversation_path, dry_run=False):
+def ensure_root_moc_contains_conversation(root_path, active_conversation_path, dry_run=False, preferred_parent=None):
     """
     Ensures root.md has a link to the active conversation under '## MOC.'.
     Idempotent: does nothing if the link already exists.
@@ -591,14 +715,7 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
     with open(root_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    moc_idx = -1
-    notes_idx = -1
-    for idx, line in enumerate(lines):
-        if line.strip() == "## MOC.":
-            moc_idx = idx
-        elif line.strip() == "## Notes" and moc_idx != -1:
-            notes_idx = idx
-            break
+    moc_idx, notes_idx = _extract_moc_bounds(lines)
 
     if moc_idx == -1:
         return False
@@ -610,7 +727,30 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
             return False
 
     insert_pos = (moc_idx + 1) if notes_idx == -1 else notes_idx
-    updated = lines[:insert_pos] + [link_line] + lines[insert_pos:]
+    insert_line = link_line
+
+    if preferred_parent:
+        parent_pattern = re.compile(r'\[\[' + re.escape(preferred_parent) + r'(?:\|[^\]]*)?\]\]')
+        for idx in range(moc_idx + 1, moc_end):
+            if parent_pattern.search(lines[idx]):
+                parent_indent_match = re.match(r'^(\s*)', lines[idx])
+                parent_indent = len(parent_indent_match.group(1)) if parent_indent_match else 0
+                child_indent = parent_indent + 4
+                insert_line = f"{' ' * child_indent}- [[{conv_filename}|Conversation]]\n"
+
+                insert_pos = idx + 1
+                while insert_pos < moc_end:
+                    current_line = lines[insert_pos]
+                    if not current_line.strip():
+                        break
+                    current_indent_match = re.match(r'^(\s*)', current_line)
+                    current_indent = len(current_indent_match.group(1)) if current_indent_match else 0
+                    if current_indent <= parent_indent:
+                        break
+                    insert_pos += 1
+                break
+
+    updated = lines[:insert_pos] + [insert_line] + lines[insert_pos:]
 
     if dry_run:
         print(f"[Dry-run] Would add conversation link to root MOC: {conv_filename}")
@@ -733,7 +873,8 @@ def main():
             if not latest_conv and config.get("ensure_active_conversation", True):
                 latest_conv = initialize_active_conversation(
                     conversations_dir,
-                    config.get("conversation_note_template_path", "")
+                    config.get("conversation_note_template_path", ""),
+                    os.path.join(conversations_dir, "root.md")
                 )
                 
             if latest_conv:
@@ -763,12 +904,21 @@ def main():
         if not latest_conv:
             latest_conv = initialize_active_conversation(
                 fallback_conversations,
-                config.get("conversation_note_template_path", "")
+                config.get("conversation_note_template_path", ""),
+                root_path or os.path.join(fallback_conversations, "root.md")
             )
         config["active_conversation"] = latest_conv
 
     if root_path and os.path.exists(config["active_conversation"]):
-        ensure_root_moc_contains_conversation(root_path, config["active_conversation"], args.dry_run)
+        conv_filename = os.path.splitext(os.path.basename(config["active_conversation"]))[0]
+        resolved_up_parents = resolve_conversation_up_parents_from_root(root_path, conv_filename)
+        preferred_parent = resolved_up_parents[0] if resolved_up_parents else None
+        ensure_root_moc_contains_conversation(
+            root_path,
+            config["active_conversation"],
+            args.dry_run,
+            preferred_parent=preferred_parent
+        )
             
     parent_file = os.path.basename(config["active_conversation"])
     parent_title, _ = os.path.splitext(parent_file)

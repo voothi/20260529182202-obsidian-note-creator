@@ -7,7 +7,7 @@ from datetime import datetime
 # Add src folder to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation
+from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation, resolve_conversation_up_parents_from_root
 from utils import sanitize_name, split_first_sentence
 from utils import get_config
 
@@ -622,6 +622,104 @@ Reviewed commit id.
             with open(root_path, "r", encoding="utf-8") as f:
                 content = f.read()
             self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 2)
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
+    def test_resolve_conversation_up_parents_uses_root_parent_context(self):
+        """
+        Verify parent resolution for a new conversation reuses root's latest conversation parent branch.
+        """
+        mock_dir = "mock_root_parent_ctx_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "## MOC.\n"
+                    "- [[20260529150158-archive|Archive.]]\n"
+                    "    - [[20260529011639-conversation|Conversation]]\n"
+                    "- [[20260529150201-active|Active.]]\n"
+                    "    - [[20260529122032-conversation|Conversation]]\n"
+                    "## Notes\n"
+                )
+
+            parents = resolve_conversation_up_parents_from_root(root_path, "20260531235959-conversation")
+            self.assertEqual(parents, ["20260529150201-active"])
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
+    def test_initialize_active_conversation_uses_root_parent_for_up_field(self):
+        """
+        Verify conversation creation injects dynamic up links from root parent context.
+        """
+        mock_dir = "mock_conv_root_up_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        template_path = os.path.join(mock_dir, "conversation-template.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "## MOC.\n"
+                    "- [[20260529150158-archive|Archive.]]\n"
+                    "    - [[20260529011639-conversation|Conversation]]\n"
+                    "- [[20260529150201-active|Active.]]\n"
+                    "    - [[20260529122032-conversation|Conversation]]\n"
+                    "## Notes\n"
+                )
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write("---\nup:\n{UP_LINES}\ncreated: {CREATED_DATE}\n---\n")
+
+            conv_path = initialize_active_conversation(mock_dir, template_path=template_path, root_path=root_path)
+            with open(conv_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn('  - "[[20260529150201-active]]"', content)
+            self.assertNotIn("{UP_LINES}", content)
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
+    def test_ensure_root_moc_inserts_under_preferred_parent(self):
+        """
+        Verify root MOC insertion can place new conversation under a preferred parent branch.
+        """
+        mock_dir = "mock_root_preferred_insert_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        conv_path = os.path.join(mock_dir, "20260531235959-conversation.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# root\n\n"
+                    "## MOC.\n"
+                    "- [[20260529150201-active|Active.]]\n"
+                    "    - [[20260529122032-conversation|Conversation]]\n"
+                    "## Notes\n"
+                )
+            with open(conv_path, "w", encoding="utf-8") as f:
+                f.write("# Conversation\n")
+
+            changed = ensure_root_moc_contains_conversation(
+                root_path,
+                conv_path,
+                dry_run=False,
+                preferred_parent="20260529150201-active"
+            )
+            self.assertTrue(changed)
+
+            with open(root_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("    - [[20260531235959-conversation|Conversation]]", content)
         finally:
             if os.path.exists(mock_dir):
                 for entry in os.scandir(mock_dir):

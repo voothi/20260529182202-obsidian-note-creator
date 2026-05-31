@@ -1,7 +1,6 @@
 ﻿---
 up:
-  - "[[20260529011639-conversation]]"
-  - "[[20260529150201-active]]"
+{UP_LINES}
 aliases: 
   - Conversation
 type: 
