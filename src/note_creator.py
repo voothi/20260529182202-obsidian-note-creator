@@ -850,18 +850,24 @@ def main():
     project_name = None
     if args.workspace:
         vault_base = r"U:\voothi.vault"
-        path_project_match = re.search(
+        path_project_patterns = [
+            # Preferred: explicit conversations path inside a project.
             r'(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/)conversations(?:\\|/|$)',
-            args.workspace,
-            re.IGNORECASE
-        )
-        if path_project_match:
+            # Backward compatibility: vault project root path without /conversations suffix.
+            r'(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/|$)',
+        ]
+        for pattern in path_project_patterns:
+            path_project_match = re.search(pattern, args.workspace, re.IGNORECASE)
+            if not path_project_match:
+                continue
+
             extracted = path_project_match.group(1).strip()
             normalized = normalize_workspace_name(extracted)
             potential_dir = os.path.join(vault_base, normalized)
             if normalized and os.path.exists(potential_dir) and os.path.isdir(potential_dir):
                 project_name = normalized
                 print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
+                break
 
         workspace_tokens = re.findall(r'\d{14}-[\w-]+', args.workspace)
         
