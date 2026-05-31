@@ -148,7 +148,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     created_date = datetime.now().strftime("%Y-%m-%d")
     # 1. Scan lines to find a ZID that acts as a prefix or header (ignoring service lines)
     # Match pattern supporting headers (###), lists (- [ ]), quotes (>), bold/italic markers
-    zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?(\d{14})\b')
+    zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?\s*[`"\']?(\d{14})\b')
     lines = text.splitlines()
     
     # Load ignore prefixes dynamically from configuration
@@ -190,6 +190,8 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         match_obj = zid_header_pattern.match(zid_line)
         prefix_and_zid = match_obj.group(0)
         remaining_text = zid_line[len(prefix_and_zid):].strip()
+        # Trim lightweight wrappers when the ZID appears as "`202...`" or '"202..."'
+        remaining_text = re.sub(r'^[`"\']+|[`"\']+$', '', remaining_text).strip()
         # Strip trailing bold/italic markers if present
         remaining_text = re.sub(r'^(?:\*\*|__|[*_])|(?:\*\*|__|[*_])$', '', remaining_text).strip()
         
@@ -224,10 +226,10 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         clean_task_name = "Untitled Note"
     else:
         # Strip any leading ZID from the front of the task name to avoid duplication in slug
-        clean_task_name = re.sub(r'^\d{14}\s+', '', clean_task_name).strip()
+        clean_task_name = re.sub(r'^[`"\']?\d{14}[`"\']?\s+', '', clean_task_name).strip()
         
     if raw_task_name:
-        raw_task_name = re.sub(r'^\d{14}\s+', '', raw_task_name).strip()
+        raw_task_name = re.sub(r'^[`"\']?\d{14}[`"\']?\s+', '', raw_task_name).strip()
         
     # Limit task name to first sentence if split is enabled
     if split_description:

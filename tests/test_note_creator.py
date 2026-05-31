@@ -342,5 +342,53 @@ Third line of content that is also important"""
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
 
+    def test_process_single_message_block_backticked_zid_header(self):
+        """
+        Verify a backticked ZID header is recognized as the source ZID instead of generating a new one.
+        """
+        config = {
+            "conversations_dir": ".",
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 4,
+            "split_description": True,
+            "one_to_one": True,
+            "ignore_prefixes": []
+        }
+
+        text = """`20260531210151`
+
+Reviewed `c68c990d91197abe7ce73f62683db0adb7a1dc2e`.
+"""
+        links, count = process_single_message_block(
+            text, config, parent_title="test-conversation", dry_run=True
+        )
+
+        self.assertEqual(count, 1)
+        self.assertTrue(links[0].startswith("- [[20260531210151-"))
+
+    def test_process_single_message_block_quoted_zid_header(self):
+        """
+        Verify quoted ZID headers (single/double quotes) are recognized.
+        """
+        config = {
+            "conversations_dir": ".",
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 4,
+            "split_description": True,
+            "one_to_one": True,
+            "ignore_prefixes": []
+        }
+
+        for quote in ["'", '"']:
+            text = f"""{quote}20260531210151{quote}
+
+Reviewed commit id.
+"""
+            links, count = process_single_message_block(
+                text, config, parent_title="test-conversation", dry_run=True
+            )
+            self.assertEqual(count, 1)
+            self.assertTrue(links[0].startswith("- [[20260531210151-"))
+
 if __name__ == '__main__':
     unittest.main()
