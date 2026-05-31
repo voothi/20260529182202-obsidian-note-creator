@@ -7,7 +7,7 @@ from datetime import datetime
 # Add src folder to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines
+from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note
 from utils import sanitize_name, split_first_sentence
 
 class TestNoteCreator(unittest.TestCase):
@@ -389,6 +389,39 @@ Reviewed commit id.
             )
             self.assertEqual(count, 1)
             self.assertTrue(links[0].startswith("- [[20260531210151-"))
+
+    def test_ensure_root_note_idempotent_with_template(self):
+        """
+        Verify root.md is created once from template and then left unchanged on repeat calls.
+        """
+        mock_dir = "mock_root_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        template_path = os.path.join(mock_dir, "root-template.md")
+        with open(template_path, "w", encoding="utf-8") as f:
+            f.write("# Root Template\n\nSeed content.\n")
+
+        try:
+            root_path, created = ensure_root_note(mock_dir, template_path=template_path, dry_run=False)
+            self.assertTrue(created)
+            self.assertTrue(os.path.exists(root_path))
+            with open(root_path, "r", encoding="utf-8") as f:
+                first_content = f.read()
+            self.assertEqual(first_content, "# Root Template\n\nSeed content.\n")
+
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write("manual content")
+
+            root_path_again, created_again = ensure_root_note(mock_dir, template_path=template_path, dry_run=False)
+            self.assertFalse(created_again)
+            with open(root_path_again, "r", encoding="utf-8") as f:
+                second_content = f.read()
+            self.assertEqual(second_content, "manual content")
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
 
 if __name__ == '__main__':
     unittest.main()

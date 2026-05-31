@@ -533,6 +533,29 @@ created: {datetime.now().strftime("%Y-%m-%d")}
     print(f"[+] Initialized active conversation file: {new_conv_filename}")
     return new_conv_path
 
+def ensure_root_note(conversations_dir, template_path="", dry_run=False):
+    """
+    Ensures conversations_dir/root.md exists. Idempotent by design.
+    If template_path is provided and exists, the new file is created from that template.
+    """
+    root_path = os.path.join(conversations_dir, "root.md")
+    if os.path.exists(root_path):
+        return root_path, False
+
+    template_content = "# Root\n\n"
+    if template_path and os.path.exists(template_path):
+        with open(template_path, "r", encoding="utf-8") as f:
+            template_content = f.read()
+
+    if dry_run:
+        print(f"[Dry-run] Would create root note: {root_path}")
+        return root_path, True
+
+    with open(root_path, "w", encoding="utf-8") as f:
+        f.write(template_content)
+    print(f"[+] Created root note: {root_path}")
+    return root_path, True
+
 def normalize_workspace_name(raw_workspace):
     """
     Normalizes workspace titles/slugs into a vault project folder name.
@@ -655,6 +678,13 @@ def main():
     if not os.path.exists(fallback_conversations):
         os.makedirs(fallback_conversations, exist_ok=True)
         print(f"[+] Created fallback conversations directory: {fallback_conversations}")
+
+    if config.get("ensure_root_note", True):
+        ensure_root_note(
+            fallback_conversations,
+            config.get("root_note_template_path", ""),
+            args.dry_run
+        )
         
     if not os.path.exists(config["active_conversation"]):
         latest_conv = discover_active_conversation(fallback_conversations)
