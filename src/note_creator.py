@@ -182,6 +182,8 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         
     clean_task_name = ""
     raw_task_name = ""
+    task_line_idx = -1
+    
     if zid_line_idx != -1:
         # Check if the ZID line itself has additional text
         zid_line = lines[zid_line_idx]
@@ -195,6 +197,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         if remaining_text:
             raw_task_name = remaining_text
             clean_task_name = clean_task_name_formatting(remaining_text)
+            task_line_idx = zid_line_idx
         else:
             # Otherwise, scan downwards for the first non-empty line
             for idx in range(zid_line_idx + 1, len(lines)):
@@ -202,10 +205,11 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
                 if line_content:
                     raw_task_name = line_content
                     clean_task_name = clean_task_name_formatting(line_content)
+                    task_line_idx = idx
                     break
     else:
         # Fall back to the first non-empty line of the block (excluding service logs)
-        for line in lines:
+        for idx, line in enumerate(lines):
             cleaned_line = line.strip()
             if cleaned_line:
                 is_service_line = any(cleaned_line.startswith(p) for p in service_prefixes)
@@ -213,6 +217,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
                     continue
                 raw_task_name = cleaned_line
                 clean_task_name = clean_task_name_formatting(cleaned_line)
+                task_line_idx = idx
                 break
                 
     if not clean_task_name:
@@ -241,7 +246,17 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     
     print(f"[*] Smart Mode - Found ZID: {zid} -> Slug: {safe_slug}")
     
-    _, remaining_desc = split_first_sentence(text.replace(zid, "").strip(), split_description)
+    # Calculate the remaining description by looking at any remainder from the task line, plus subsequent lines
+    _, line_desc = split_first_sentence(raw_task_name, split_description)
+    subsequent_text = "\n".join(lines[task_line_idx + 1:]).strip()
+    if line_desc.strip():
+        if subsequent_text:
+            remaining_desc = f"{line_desc.strip()}\n\n{subsequent_text}"
+        else:
+            remaining_desc = line_desc.strip()
+    else:
+        remaining_desc = subsequent_text
+        
     if use_one_to_one:
         if not remaining_desc.strip():
             if clean_task_name != raw_task_name:

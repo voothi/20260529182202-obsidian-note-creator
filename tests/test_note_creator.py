@@ -297,5 +297,50 @@ I have successfully updated AGENTS.md to add a rule preventing agents from savin
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
 
+    def test_multi_line_no_punctuation_description_retention(self):
+        """
+        Verify that a multi-line message block without standard sentence punctuation
+        in the first line correctly treats the first line as the task name, and
+        correctly saves the subsequent lines in the description (rather than discarding them).
+        """
+        mock_dir = "mock_test_multiline_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        config = {
+            "conversations_dir": mock_dir,
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 10,
+            "split_description": True,
+            "one_to_one": False,
+            "ignore_prefixes": []
+        }
+        
+        text = """20260531165721 Title line with no punctuation
+Second line of content that is very important
+Third line of content that is also important"""
+        
+        try:
+            links, count = process_single_message_block(
+                text, config, parent_title="test-conversation", dry_run=False
+            )
+            
+            filename = "20260531165721-title-line-with-no-punctuation.md"
+            filepath = os.path.join(mock_dir, filename)
+            self.assertTrue(os.path.exists(filepath))
+            
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            self.assertIn("aliases: \n  - Title line with no punctuation\n", content)
+            self.assertIn("# Title line with no punctuation\n", content)
+            self.assertIn("## Description\n\nSecond line of content that is very important\nThird line of content that is also important", content)
+            
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
 if __name__ == '__main__':
     unittest.main()
