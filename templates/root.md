@@ -23,10 +23,7 @@ due:
 
 ## MOC.
 
-- [[20260529150158-archive|Archive.]]
-    - [[20260529011639-conversation|Conversation]]
-- [[20260529150201-active|Active.]]
-    - [[20260529122032-conversation|Conversation]]
+
 
 ## Notes
 

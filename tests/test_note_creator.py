@@ -7,7 +7,7 @@ from datetime import datetime
 # Add src folder to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation
+from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation
 from utils import sanitize_name, split_first_sentence
 from utils import get_config
 
@@ -515,6 +515,35 @@ Reviewed commit id.
             self.assertNotIn("{CREATED_DATE}", content)
             self.assertRegex(content, r"file: \d{14}-conversation\.md")
             self.assertRegex(content, r"created: \d{4}-\d{2}-\d{2}")
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
+    def test_ensure_root_moc_contains_conversation_idempotent(self):
+        """
+        Verify root MOC receives one conversation link and does not duplicate it.
+        """
+        mock_dir = "mock_root_moc_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        conv_path = os.path.join(mock_dir, "20260531222451-conversation.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write("# root\n\n## MOC.\n\n## Notes\n")
+            with open(conv_path, "w", encoding="utf-8") as f:
+                f.write("# Conversation\n")
+
+            changed_first = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
+            changed_second = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
+            self.assertTrue(changed_first)
+            self.assertFalse(changed_second)
+
+            with open(root_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 1)
         finally:
             if os.path.exists(mock_dir):
                 for entry in os.scandir(mock_dir):

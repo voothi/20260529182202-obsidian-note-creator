@@ -577,6 +577,48 @@ def ensure_root_note(conversations_dir, template_path="", dry_run=False):
     print(f"[+] Created root note: {root_path}")
     return root_path, True
 
+def ensure_root_moc_contains_conversation(root_path, active_conversation_path, dry_run=False):
+    """
+    Ensures root.md has a link to the active conversation under '## MOC.'.
+    Idempotent: does nothing if the link already exists.
+    """
+    if not os.path.exists(root_path) or not os.path.exists(active_conversation_path):
+        return False
+
+    conv_filename = os.path.splitext(os.path.basename(active_conversation_path))[0]
+    link_line = f"- [[{conv_filename}|Conversation]]\n"
+
+    with open(root_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    full_content = "".join(lines)
+    if f"[[{conv_filename}|" in full_content or f"[[{conv_filename}]]" in full_content:
+        return False
+
+    moc_idx = -1
+    notes_idx = -1
+    for idx, line in enumerate(lines):
+        if line.strip() == "## MOC.":
+            moc_idx = idx
+        elif line.strip() == "## Notes" and moc_idx != -1:
+            notes_idx = idx
+            break
+
+    if moc_idx == -1:
+        return False
+
+    insert_pos = (moc_idx + 1) if notes_idx == -1 else notes_idx
+    updated = lines[:insert_pos] + [link_line] + lines[insert_pos:]
+
+    if dry_run:
+        print(f"[Dry-run] Would add conversation link to root MOC: {conv_filename}")
+        return True
+
+    with open(root_path, "w", encoding="utf-8") as f:
+        f.writelines(updated)
+    print(f"[+] Added conversation link to root MOC: {conv_filename}")
+    return True
+
 def normalize_workspace_name(raw_workspace):
     """
     Normalizes workspace titles/slugs into a vault project folder name.
@@ -706,8 +748,9 @@ def main():
         os.makedirs(fallback_conversations, exist_ok=True)
         print(f"[+] Created fallback conversations directory: {fallback_conversations}")
 
+    root_path = None
     if config.get("ensure_root_note", True):
-        ensure_root_note(
+        root_path, _ = ensure_root_note(
             fallback_conversations,
             config.get("root_note_template_path", ""),
             args.dry_run
@@ -721,6 +764,9 @@ def main():
                 config.get("conversation_note_template_path", "")
             )
         config["active_conversation"] = latest_conv
+
+    if root_path and os.path.exists(config["active_conversation"]):
+        ensure_root_moc_contains_conversation(root_path, config["active_conversation"], args.dry_run)
             
     parent_file = os.path.basename(config["active_conversation"])
     parent_title, _ = os.path.splitext(parent_file)
