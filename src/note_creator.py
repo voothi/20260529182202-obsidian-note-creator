@@ -793,6 +793,8 @@ def normalize_workspace_name(raw_workspace):
     workspace_raw = raw_workspace.strip()
     workspace_raw = re.sub(r'^\d{14}[-_\s]*', '', workspace_raw)
     workspace_raw = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
+    workspace_raw = re.sub(r'\s*-\s*(Visual Studio Code|VS Code|VSCodium|Cursor|Antigravity|Angigravity|Code - OSS)\s*$', '', workspace_raw, flags=re.IGNORECASE).strip()
+    workspace_raw = re.sub(r'\.code-workspace$', '', workspace_raw, flags=re.IGNORECASE).strip()
     workspace_raw = re.sub(r'\.md$', '', workspace_raw, flags=re.IGNORECASE).strip()
     return workspace_raw
 
@@ -848,16 +850,34 @@ def main():
     project_name = None
     if args.workspace:
         vault_base = r"U:\voothi.vault"
+        path_project_match = re.search(
+            r'(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/)conversations(?:\\|/|$)',
+            args.workspace,
+            re.IGNORECASE
+        )
+        if path_project_match:
+            extracted = path_project_match.group(1).strip()
+            normalized = normalize_workspace_name(extracted)
+            potential_dir = os.path.join(vault_base, normalized)
+            if normalized and os.path.exists(potential_dir) and os.path.isdir(potential_dir):
+                project_name = normalized
+                print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
+
         workspace_tokens = re.findall(r'\d{14}-[\w-]+', args.workspace)
         
         # VSCode titles often contain both file and workspace slugs:
         # "<file-zid-slug>.md - <workspace-zid-slug> - Visual Studio Code".
         # Prefer the rightmost token first, then fall back to raw input.
         candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
+        code_workspace_match = re.search(r'(\d{14}-[\w-]+)\.code-workspace', args.workspace, re.IGNORECASE)
+        if code_workspace_match:
+            candidate_tokens.insert(0, code_workspace_match.group(1))
         candidate_tokens.append(args.workspace)
         
         seen_candidates = set()
         for candidate in candidate_tokens:
+            if project_name:
+                break
             normalized = normalize_workspace_name(candidate)
             if not normalized or normalized in seen_candidates:
                 continue
