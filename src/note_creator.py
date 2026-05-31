@@ -591,9 +591,11 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
     with open(root_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    full_content = "".join(lines)
-    if f"[[{conv_filename}|" in full_content or f"[[{conv_filename}]]" in full_content:
-        return False
+    # Only treat as existing when the wikilink appears on a markdown list-item line
+    list_link_pattern = re.compile(r'^\s*[-*+]\s+.*\[\[' + re.escape(conv_filename) + r'(?:\||\]\])')
+    for line in lines:
+        if list_link_pattern.search(line):
+            return False
 
     moc_idx = -1
     notes_idx = -1
