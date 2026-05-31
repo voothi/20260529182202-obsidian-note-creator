@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import argparse
+from urllib.parse import unquote
 from datetime import datetime
 from utils import get_config, sanitize_name, split_first_sentence, discover_active_conversation
 
@@ -898,10 +899,23 @@ def main():
     # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
     if not project_name:
         full_input_text = "".join(lines_to_process)
-        vault_path_match = re.search(r'U:\\voothi\.vault\\([\w-]+)\\conversations\\', full_input_text, re.IGNORECASE)
-        if vault_path_match:
-            project_name = vault_path_match.group(1).strip()
-            print(f"[*] Smart Discovery - Inferred project '{project_name}' from vault path in input text.")
+        discovery_patterns = [
+            r'U:\\voothi\.vault\\([\w\-\s]+)\\conversations\\',
+            r'Private Vault[\\/]([\w\-\s]+)[\\/]conversations[\\/]',
+            r'file:///u%3A/voothi\.vault/([^/]+)/conversations/',
+        ]
+        for pattern in discovery_patterns:
+            vault_path_match = re.search(pattern, full_input_text, re.IGNORECASE)
+            if not vault_path_match:
+                continue
+
+            raw_project = vault_path_match.group(1).strip()
+            raw_project = unquote(raw_project)
+            normalized = normalize_workspace_name(raw_project)
+            if normalized:
+                project_name = normalized
+                print(f"[*] Smart Discovery - Inferred project '{project_name}' from input text.")
+                break
 
     if project_name:
         vault_base = r"U:\voothi.vault"
