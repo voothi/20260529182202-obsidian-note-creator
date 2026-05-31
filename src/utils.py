@@ -20,9 +20,13 @@ def get_config(config_path="config.ini"):
     ensure_root_note = config.getboolean("Obsidian", "ensure_root_note", fallback=True)
     ensure_active_conversation = config.getboolean("Obsidian", "ensure_active_conversation", fallback=True)
     root_note_template_path = config.get("Obsidian", "root_note_template_path", fallback="templates/root.md")
+    conversation_note_template_path = config.get("Obsidian", "conversation_note_template_path", fallback="templates/conversation.md")
     if root_note_template_path and not os.path.isabs(root_note_template_path):
         config_dir = os.path.dirname(os.path.abspath(config_path))
         root_note_template_path = os.path.abspath(os.path.join(config_dir, root_note_template_path))
+    if conversation_note_template_path and not os.path.isabs(conversation_note_template_path):
+        config_dir = os.path.dirname(os.path.abspath(config_path))
+        conversation_note_template_path = os.path.abspath(os.path.join(config_dir, conversation_note_template_path))
     slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
     split_description = config.getboolean("Parser", "split_description", fallback=True)
     one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)
@@ -36,6 +40,7 @@ def get_config(config_path="config.ini"):
         "ensure_root_note": ensure_root_note,
         "ensure_active_conversation": ensure_active_conversation,
         "root_note_template_path": root_note_template_path.strip(),
+        "conversation_note_template_path": conversation_note_template_path.strip(),
         "slug_word_count": slug_word_count,
         "split_description": split_description,
         "one_to_one": one_to_one,

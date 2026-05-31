@@ -7,7 +7,7 @@ from datetime import datetime
 # Add src folder to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note
+from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation
 from utils import sanitize_name, split_first_sentence
 from utils import get_config
 
@@ -424,6 +424,29 @@ Reviewed commit id.
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
 
+    def test_ensure_root_note_replaces_created_date_placeholder(self):
+        """
+        Verify {CREATED_DATE} placeholder is rendered in root template.
+        """
+        mock_dir = "mock_root_date_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        template_path = os.path.join(mock_dir, "root-template.md")
+        with open(template_path, "w", encoding="utf-8") as f:
+            f.write("created: {CREATED_DATE}\n")
+        try:
+            root_path, created = ensure_root_note(mock_dir, template_path=template_path, dry_run=False)
+            self.assertTrue(created)
+            with open(root_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertNotIn("{CREATED_DATE}", content)
+            self.assertRegex(content, r"created: \d{4}-\d{2}-\d{2}")
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
     def test_get_config_supports_utf8_bom(self):
         """
         Verify config files with UTF-8 BOM are parsed correctly.
@@ -472,6 +495,32 @@ Reviewed commit id.
                 os.remove(cfg_path)
             if os.path.exists(cfg_dir):
                 os.rmdir(cfg_dir)
+
+    def test_initialize_active_conversation_uses_template_placeholders(self):
+        """
+        Verify conversation template placeholders {ZID}/{CREATED_DATE} are rendered.
+        """
+        mock_dir = "mock_conv_template_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        template_path = os.path.join(mock_dir, "conversation-template.md")
+        with open(template_path, "w", encoding="utf-8") as f:
+            f.write("file: {ZID}-conversation.md\ncreated: {CREATED_DATE}\n")
+
+        try:
+            conv_path = initialize_active_conversation(mock_dir, template_path=template_path)
+            self.assertTrue(os.path.exists(conv_path))
+            with open(conv_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertNotIn("{ZID}", content)
+            self.assertNotIn("{CREATED_DATE}", content)
+            self.assertRegex(content, r"file: \d{14}-conversation\.md")
+            self.assertRegex(content, r"created: \d{4}-\d{2}-\d{2}")
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
 
 if __name__ == '__main__':
     unittest.main()

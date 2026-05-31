@@ -502,7 +502,21 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         
     return True
 
-def initialize_active_conversation(conversations_dir):
+def render_template(template_path="", fallback_content="", variables=None):
+    """
+    Loads a template and replaces {PLACEHOLDER} variables with provided values.
+    """
+    variables = variables or {}
+    content = fallback_content
+    if template_path and os.path.exists(template_path):
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+    for key, value in variables.items():
+        content = content.replace(f"{{{key}}}", value)
+    return content
+
+def initialize_active_conversation(conversations_dir, template_path=""):
     """
     Creates a template active conversation note in conversations_dir and returns its path.
     """
@@ -510,15 +524,16 @@ def initialize_active_conversation(conversations_dir):
     new_conv_filename = f"{now_zid}-conversation.md"
     new_conv_path = os.path.join(conversations_dir, new_conv_filename)
     
-    conv_content = f"""---
+    created_date = datetime.now().strftime("%Y-%m-%d")
+    conv_fallback = f"""---
 aliases:
-  - Conversation {datetime.now().strftime("%Y-%m-%d")}
+  - Conversation {created_date}
 tags:
   - conversation
-created: {datetime.now().strftime("%Y-%m-%d")}
+created: {created_date}
 ---
 
-# Conversation {datetime.now().strftime("%Y-%m-%d")}
+# Conversation {created_date}
 
 ## MOC.
 
@@ -527,6 +542,11 @@ created: {datetime.now().strftime("%Y-%m-%d")}
 ## Notes
 
 """
+    conv_content = render_template(
+        template_path=template_path,
+        fallback_content=conv_fallback,
+        variables={"ZID": now_zid, "CREATED_DATE": created_date}
+    )
     with open(new_conv_path, "w", encoding="utf-8") as f:
         f.write(conv_content)
         
@@ -542,10 +562,11 @@ def ensure_root_note(conversations_dir, template_path="", dry_run=False):
     if os.path.exists(root_path):
         return root_path, False
 
-    template_content = "# Root\n\n"
-    if template_path and os.path.exists(template_path):
-        with open(template_path, "r", encoding="utf-8") as f:
-            template_content = f.read()
+    template_content = render_template(
+        template_path=template_path,
+        fallback_content="# Root\n\n",
+        variables={"CREATED_DATE": datetime.now().strftime("%Y-%m-%d")}
+    )
 
     if dry_run:
         print(f"[Dry-run] Would create root note: {root_path}")
@@ -666,7 +687,10 @@ def main():
             config["conversations_dir"] = conversations_dir
             latest_conv = discover_active_conversation(conversations_dir)
             if not latest_conv and config.get("ensure_active_conversation", True):
-                latest_conv = initialize_active_conversation(conversations_dir)
+                latest_conv = initialize_active_conversation(
+                    conversations_dir,
+                    config.get("conversation_note_template_path", "")
+                )
                 
             if latest_conv:
                 config["active_conversation"] = latest_conv
@@ -692,7 +716,10 @@ def main():
     if not os.path.exists(config["active_conversation"]) and config.get("ensure_active_conversation", True):
         latest_conv = discover_active_conversation(fallback_conversations)
         if not latest_conv:
-            latest_conv = initialize_active_conversation(fallback_conversations)
+            latest_conv = initialize_active_conversation(
+                fallback_conversations,
+                config.get("conversation_note_template_path", "")
+            )
         config["active_conversation"] = latest_conv
             
     parent_file = os.path.basename(config["active_conversation"])

@@ -11,7 +11,7 @@ same:
 project:
 area:
 tags: []
-created: 2026-05-29
+created: {CREATED_DATE}
 due:
 ---
 
