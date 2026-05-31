@@ -591,12 +591,6 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
     with open(root_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    # Only treat as existing when the wikilink appears on a markdown list-item line
-    list_link_pattern = re.compile(r'^\s*[-*+]\s+.*\[\[' + re.escape(conv_filename) + r'(?:\||\]\])')
-    for line in lines:
-        if list_link_pattern.search(line):
-            return False
-
     moc_idx = -1
     notes_idx = -1
     for idx, line in enumerate(lines):
@@ -608,6 +602,12 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
 
     if moc_idx == -1:
         return False
+
+    # Treat as existing when link appears anywhere on a line inside the MOC section
+    moc_end = notes_idx if notes_idx != -1 else len(lines)
+    for line in lines[moc_idx + 1:moc_end]:
+        if f"[[{conv_filename}|" in line or f"[[{conv_filename}]]" in line:
+            return False
 
     insert_pos = (moc_idx + 1) if notes_idx == -1 else notes_idx
     updated = lines[:insert_pos] + [link_line] + lines[insert_pos:]

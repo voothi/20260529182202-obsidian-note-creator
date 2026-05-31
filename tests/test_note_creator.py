@@ -551,9 +551,9 @@ Reviewed commit id.
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
 
-    def test_ensure_root_moc_ignores_non_list_wikilink(self):
+    def test_ensure_root_moc_detects_non_list_wikilink_in_moc_section(self):
         """
-        Verify non-list wikilink does not count as existing MOC list entry.
+        Verify any wikilink line inside MOC section counts as existing.
         """
         mock_dir = "mock_root_moc_nonlist_dir"
         os.makedirs(mock_dir, exist_ok=True)
@@ -566,10 +566,10 @@ Reviewed commit id.
                 f.write("# Conversation\n")
 
             changed = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
-            self.assertTrue(changed)
+            self.assertFalse(changed)
             with open(root_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 2)
+            self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 1)
         finally:
             if os.path.exists(mock_dir):
                 for entry in os.scandir(mock_dir):
@@ -596,6 +596,32 @@ Reviewed commit id.
             with open(root_path, "r", encoding="utf-8") as f:
                 content = f.read()
             self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 1)
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
+    def test_ensure_root_moc_ignores_wikilink_outside_moc_section(self):
+        """
+        Verify wikilink outside MOC section does not block insertion into MOC.
+        """
+        mock_dir = "mock_root_moc_outside_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        conv_path = os.path.join(mock_dir, "20260531222451-conversation.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write("# root\n\n## MOC.\n\n## Notes\nReference [[20260531222451-conversation|Conversation]]\n")
+            with open(conv_path, "w", encoding="utf-8") as f:
+                f.write("# Conversation\n")
+
+            changed = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
+            self.assertTrue(changed)
+            with open(root_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 2)
         finally:
             if os.path.exists(mock_dir):
                 for entry in os.scandir(mock_dir):
