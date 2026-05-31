@@ -105,11 +105,16 @@ Add the following snippet to your global AHK script inside `U:\voothi\2024041111
 ```autohotkey
 ^!k::
 {
-    ; Extract the active window title to parse the workspace (e.g., 20260308110646-kardenwort-mpv)
+    ; Extract the active window title and find the LAST ZID-slug match.
+    ; VS Code title format: "<filename> - <WorkspaceName> - Visual Studio Code"
+    ; Using RegExMatch's first match would capture the open FILE's ZID slug,
+    ; not the workspace name. We loop to find the rightmost (last) match instead.
     activeTitle := WinGetTitle("A")
     workspace := ""
-    if RegExMatch(activeTitle, "(\d{14}-[\w-]+)", &match) {
-        workspace := match[1]
+    startPos := 1
+    while (pos := RegExMatch(activeTitle, "\d{14}-[\w-]+", &match, startPos)) {
+        workspace := match[]
+        startPos := pos + 1
     }
 
     Send("^c")
