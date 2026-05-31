@@ -3,6 +3,14 @@ import re
 import glob
 import configparser
 
+def _split_delimited(raw_value, delimiter="||"):
+    """
+    Splits a config value by delimiter and trims each entry.
+    """
+    if not raw_value:
+        return []
+    return [entry.strip() for entry in raw_value.split(delimiter) if entry.strip()]
+
 def get_config(config_path="config.ini"):
     """
     Loads configuration settings from config.ini, falling back to defaults if not found.
@@ -32,6 +40,42 @@ def get_config(config_path="config.ini"):
     one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)
     ignore_prefixes_raw = config.get("Parser", "ignore_prefixes", fallback="Edited ,Viewed ,Ran command:,Created At:,Completed At:,Created file ,Stdout:,Stderr:")
     ignore_prefixes = [p for p in ignore_prefixes_raw.split(",") if p]
+    
+    vault_base = config.get("WorkspaceDetection", "vault_base", fallback=r"U:\voothi.vault").strip()
+    workspace_path_patterns_raw = config.get(
+        "WorkspaceDetection",
+        "workspace_path_patterns",
+        fallback=r"(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/)conversations(?:\\|/|$)||(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/|$)"
+    )
+    workspace_discovery_patterns_raw = config.get(
+        "WorkspaceDetection",
+        "workspace_discovery_patterns",
+        fallback=r"U:\\voothi\.vault\\([\w\-\s]+)\\conversations\\||Private Vault[\\/]([\w\-\s]+)[\\/]conversations[\\/]||file:///u%3A/voothi\.vault/([^/]+)/conversations/"
+    )
+    workspace_slug_pattern = config.get(
+        "WorkspaceDetection",
+        "workspace_slug_pattern",
+        fallback=r"\d{14}-[\w-]+"
+    ).strip()
+    workspace_code_workspace_pattern = config.get(
+        "WorkspaceDetection",
+        "workspace_code_workspace_pattern",
+        fallback=r"(\d{14}-[\w-]+)\.code-workspace"
+    ).strip()
+    workspace_normalization_patterns_raw = config.get(
+        "WorkspaceDetection",
+        "workspace_normalization_patterns",
+        fallback=r"^\d{14}[-_\s]*||\s*\(Workspace\).*||\.code-workspace$||\.md$"
+    )
+    workspace_title_suffixes_raw = config.get(
+        "WorkspaceDetection",
+        "workspace_title_suffixes",
+        fallback="Visual Studio Code,VS Code,VSCodium,Cursor,Antigravity,Angigravity,Code - OSS"
+    )
+    workspace_title_suffixes = [s.strip() for s in workspace_title_suffixes_raw.split(",") if s.strip()]
+    workspace_path_patterns = _split_delimited(workspace_path_patterns_raw)
+    workspace_discovery_patterns = _split_delimited(workspace_discovery_patterns_raw)
+    workspace_normalization_patterns = _split_delimited(workspace_normalization_patterns_raw)
 
     return {
         "conversations_dir": conversations_dir,
@@ -44,7 +88,14 @@ def get_config(config_path="config.ini"):
         "slug_word_count": slug_word_count,
         "split_description": split_description,
         "one_to_one": one_to_one,
-        "ignore_prefixes": ignore_prefixes
+        "ignore_prefixes": ignore_prefixes,
+        "vault_base": vault_base,
+        "workspace_path_patterns": workspace_path_patterns,
+        "workspace_discovery_patterns": workspace_discovery_patterns,
+        "workspace_slug_pattern": workspace_slug_pattern,
+        "workspace_code_workspace_pattern": workspace_code_workspace_pattern,
+        "workspace_normalization_patterns": workspace_normalization_patterns,
+        "workspace_title_suffixes": workspace_title_suffixes,
     }
 
 

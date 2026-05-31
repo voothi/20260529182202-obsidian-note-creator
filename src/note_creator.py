@@ -787,16 +787,37 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
         print("[+] Normalized root MOC spacing.")
     return True
 
-def normalize_workspace_name(raw_workspace):
+def normalize_workspace_name(raw_workspace, normalization_patterns=None, title_suffixes=None):
     """
     Normalizes workspace titles/slugs into a vault project folder name.
     """
     workspace_raw = raw_workspace.strip()
-    workspace_raw = re.sub(r'^\d{14}[-_\s]*', '', workspace_raw)
-    workspace_raw = re.sub(r'\s*\(Workspace\).*', '', workspace_raw).strip()
-    workspace_raw = re.sub(r'\s*-\s*(Visual Studio Code|VS Code|VSCodium|Cursor|Antigravity|Angigravity|Code - OSS)\s*$', '', workspace_raw, flags=re.IGNORECASE).strip()
-    workspace_raw = re.sub(r'\.code-workspace$', '', workspace_raw, flags=re.IGNORECASE).strip()
-    workspace_raw = re.sub(r'\.md$', '', workspace_raw, flags=re.IGNORECASE).strip()
+    suffix_list = title_suffixes or [
+        "Visual Studio Code",
+        "VS Code",
+        "VSCodium",
+        "Cursor",
+        "Antigravity",
+        "Angigravity",
+        "Code - OSS",
+    ]
+    if suffix_list:
+        suffix_expr = "|".join(re.escape(suffix) for suffix in suffix_list if suffix.strip())
+        if suffix_expr:
+            workspace_raw = re.sub(rf'\s*-\s*(?:{suffix_expr})\s*$', '', workspace_raw, flags=re.IGNORECASE).strip()
+    
+    patterns = normalization_patterns or [
+        r'^\d{14}[-_\s]*',
+        r'\s*\(Workspace\).*',
+        r'\.code-workspace$',
+        r'\.md$',
+    ]
+    for pattern in patterns:
+        try:
+            workspace_raw = re.sub(pattern, '', workspace_raw, flags=re.IGNORECASE).strip()
+        except re.error as e:
+            print(f"[Warning] Invalid workspace normalization pattern '{pattern}': {e}")
+    
     return workspace_raw
 
 def main():
@@ -849,34 +870,52 @@ def main():
 
     # 1. Prioritize focused active workspace from args.workspace first (if it exists on disk)
     project_name = None
+    vault_base = config.get("vault_base", r"U:\voothi.vault")
+    workspace_path_patterns = config.get("workspace_path_patterns", [])
+    workspace_discovery_patterns = config.get("workspace_discovery_patterns", [])
+    workspace_slug_pattern = config.get("workspace_slug_pattern", r"\d{14}-[\w-]+")
+    workspace_code_workspace_pattern = config.get("workspace_code_workspace_pattern", r"(\d{14}-[\w-]+)\.code-workspace")
+    workspace_normalization_patterns = config.get("workspace_normalization_patterns", [])
+    workspace_title_suffixes = config.get("workspace_title_suffixes", [])
     if args.workspace:
-        vault_base = r"U:\voothi.vault"
-        path_project_patterns = [
-            # Preferred: explicit conversations path inside a project.
-            r'(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/)conversations(?:\\|/|$)',
-            # Backward compatibility: vault project root path without /conversations suffix.
-            r'(?:U:\\voothi\.vault\\|Private Vault[\\/])([\w\-\s]+)(?:\\|/|$)',
-        ]
-        for pattern in path_project_patterns:
-            path_project_match = re.search(pattern, args.workspace, re.IGNORECASE)
+        for pattern in workspace_path_patterns:
+            try:
+                path_project_match = re.search(pattern, args.workspace, re.IGNORECASE)
+            except re.error as e:
+                print(f"[Warning] Invalid workspace_path_patterns regex '{pattern}': {e}")
+                continue
             if not path_project_match:
                 continue
 
             extracted = path_project_match.group(1).strip()
-            normalized = normalize_workspace_name(extracted)
+            normalized = normalize_workspace_name(
+                extracted,
+                workspace_normalization_patterns,
+                workspace_title_suffixes,
+            )
             potential_dir = os.path.join(vault_base, normalized)
             if normalized and os.path.exists(potential_dir) and os.path.isdir(potential_dir):
                 project_name = normalized
                 print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
                 break
 
-        workspace_tokens = re.findall(r'\d{14}-[\w-]+', args.workspace)
+        try:
+            workspace_tokens = re.findall(workspace_slug_pattern, args.workspace)
+        except re.error as e:
+            print(f"[Warning] Invalid workspace_slug_pattern regex '{workspace_slug_pattern}': {e}")
+            workspace_tokens = []
+        if workspace_tokens and isinstance(workspace_tokens[0], tuple):
+            workspace_tokens = [token[0] for token in workspace_tokens if token]
         
         # VSCode titles often contain both file and workspace slugs:
         # "<file-zid-slug>.md - <workspace-zid-slug> - Visual Studio Code".
         # Prefer the rightmost token first, then fall back to raw input.
         candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
-        code_workspace_match = re.search(r'(\d{14}-[\w-]+)\.code-workspace', args.workspace, re.IGNORECASE)
+        try:
+            code_workspace_match = re.search(workspace_code_workspace_pattern, args.workspace, re.IGNORECASE)
+        except re.error as e:
+            print(f"[Warning] Invalid workspace_code_workspace_pattern regex '{workspace_code_workspace_pattern}': {e}")
+            code_workspace_match = None
         if code_workspace_match:
             candidate_tokens.insert(0, code_workspace_match.group(1))
         candidate_tokens.append(args.workspace)
@@ -885,7 +924,11 @@ def main():
         for candidate in candidate_tokens:
             if project_name:
                 break
-            normalized = normalize_workspace_name(candidate)
+            normalized = normalize_workspace_name(
+                candidate,
+                workspace_normalization_patterns,
+                workspace_title_suffixes,
+            )
             if not normalized or normalized in seen_candidates:
                 continue
                 
@@ -899,26 +942,28 @@ def main():
     # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
     if not project_name:
         full_input_text = "".join(lines_to_process)
-        discovery_patterns = [
-            r'U:\\voothi\.vault\\([\w\-\s]+)\\conversations\\',
-            r'Private Vault[\\/]([\w\-\s]+)[\\/]conversations[\\/]',
-            r'file:///u%3A/voothi\.vault/([^/]+)/conversations/',
-        ]
-        for pattern in discovery_patterns:
-            vault_path_match = re.search(pattern, full_input_text, re.IGNORECASE)
+        for pattern in workspace_discovery_patterns:
+            try:
+                vault_path_match = re.search(pattern, full_input_text, re.IGNORECASE)
+            except re.error as e:
+                print(f"[Warning] Invalid workspace_discovery_patterns regex '{pattern}': {e}")
+                continue
             if not vault_path_match:
                 continue
 
             raw_project = vault_path_match.group(1).strip()
             raw_project = unquote(raw_project)
-            normalized = normalize_workspace_name(raw_project)
+            normalized = normalize_workspace_name(
+                raw_project,
+                workspace_normalization_patterns,
+                workspace_title_suffixes,
+            )
             if normalized:
                 project_name = normalized
                 print(f"[*] Smart Discovery - Inferred project '{project_name}' from input text.")
                 break
 
     if project_name:
-        vault_base = r"U:\voothi.vault"
         project_dir = os.path.join(vault_base, project_name)
         
         # If the project folder exists, OR if auto_create_project is True:
