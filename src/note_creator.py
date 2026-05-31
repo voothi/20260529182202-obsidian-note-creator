@@ -752,6 +752,17 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
 
     updated = lines[:insert_pos] + [insert_line] + lines[insert_pos:]
 
+    # Keep MOC visually isolated with one empty line after header and before Notes.
+    moc_idx_new, notes_idx_new = _extract_moc_bounds(updated)
+    if moc_idx_new != -1:
+        if moc_idx_new + 1 >= len(updated) or updated[moc_idx_new + 1].strip() != "":
+            updated.insert(moc_idx_new + 1, "\n")
+
+        moc_idx_new, notes_idx_new = _extract_moc_bounds(updated)
+        if notes_idx_new != -1:
+            if notes_idx_new - 1 < 0 or updated[notes_idx_new - 1].strip() != "":
+                updated.insert(notes_idx_new, "\n")
+
     if dry_run:
         print(f"[Dry-run] Would add conversation link to root MOC: {conv_filename}")
         return True

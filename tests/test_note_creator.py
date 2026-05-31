@@ -727,5 +727,36 @@ Reviewed commit id.
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
 
+    def test_ensure_root_moc_keeps_blank_line_boundaries(self):
+        """
+        Verify one empty line exists after '## MOC.' and before '## Notes' after insertion.
+        """
+        mock_dir = "mock_root_spacing_dir"
+        os.makedirs(mock_dir, exist_ok=True)
+        root_path = os.path.join(mock_dir, "root.md")
+        conv_path = os.path.join(mock_dir, "20260530001202-conversation.md")
+        try:
+            with open(root_path, "w", encoding="utf-8") as f:
+                f.write("# root\n\n## MOC.\n## Notes\n")
+            with open(conv_path, "w", encoding="utf-8") as f:
+                f.write("# Conversation\n")
+
+            changed = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
+            self.assertTrue(changed)
+
+            with open(root_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+        finally:
+            if os.path.exists(mock_dir):
+                for entry in os.scandir(mock_dir):
+                    if entry.is_file():
+                        os.remove(entry.path)
+                os.rmdir(mock_dir)
+
 if __name__ == '__main__':
     unittest.main()
