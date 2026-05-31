@@ -665,11 +665,14 @@ def main():
                 
             config["conversations_dir"] = conversations_dir
             latest_conv = discover_active_conversation(conversations_dir)
-            if not latest_conv:
+            if not latest_conv and config.get("ensure_active_conversation", True):
                 latest_conv = initialize_active_conversation(conversations_dir)
                 
-            config["active_conversation"] = latest_conv
-            print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
+            if latest_conv:
+                config["active_conversation"] = latest_conv
+                print(f"[*] Dynamic Discovery - Project: '{project_name}' -> Active Conversation: {os.path.basename(latest_conv)}")
+            else:
+                print("[*] Dynamic Discovery - No active conversation found and ensure_active_conversation is disabled.")
         else:
             print(f"[!] Discovered project path '{project_dir}' does not exist. Falling back to default config.")
 
@@ -686,7 +689,7 @@ def main():
             args.dry_run
         )
         
-    if not os.path.exists(config["active_conversation"]):
+    if not os.path.exists(config["active_conversation"]) and config.get("ensure_active_conversation", True):
         latest_conv = discover_active_conversation(fallback_conversations)
         if not latest_conv:
             latest_conv = initialize_active_conversation(fallback_conversations)
@@ -721,7 +724,10 @@ def main():
                 moc_links_only.append(" " * indent + "- " + stripped + "\n")
                 
     if moc_links_only:
-        update_conversation_moc(config["active_conversation"], moc_links_only, args.dry_run)
+        if not os.path.exists(config["active_conversation"]) and not config.get("ensure_active_conversation", True):
+            print("[*] Skipping MOC update because active conversation is missing and ensure_active_conversation is disabled.")
+        else:
+            update_conversation_moc(config["active_conversation"], moc_links_only, args.dry_run)
         
         # Combine output links for clipboard or printing
         output_links_text = "".join(moc_links_only)

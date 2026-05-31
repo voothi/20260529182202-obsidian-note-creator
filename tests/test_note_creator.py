@@ -439,5 +439,20 @@ Reviewed commit id.
             if os.path.exists(cfg_path):
                 os.remove(cfg_path)
 
+    def test_get_config_parses_ensure_active_conversation(self):
+        """
+        Verify the ensure_active_conversation flag is parsed from config.
+        """
+        cfg_path = "mock_ensure_active_config.ini"
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                f.write("[Obsidian]\nensure_active_conversation = false\n")
+            cfg = get_config(cfg_path)
+            self.assertIn("ensure_active_conversation", cfg)
+            self.assertFalse(cfg["ensure_active_conversation"])
+        finally:
+            if os.path.exists(cfg_path):
+                os.remove(cfg_path)
+
 if __name__ == '__main__':
     unittest.main()

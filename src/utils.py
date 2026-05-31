@@ -18,6 +18,7 @@ def get_config(config_path="config.ini"):
     active_conversation = config.get("Obsidian", "active_conversation", fallback=r"U:\voothi.vault\kardenwort-mpv\conversations\20260529122032-conversation.md")
     auto_create_project = config.getboolean("Obsidian", "auto_create_project", fallback=False)
     ensure_root_note = config.getboolean("Obsidian", "ensure_root_note", fallback=True)
+    ensure_active_conversation = config.getboolean("Obsidian", "ensure_active_conversation", fallback=True)
     root_note_template_path = config.get("Obsidian", "root_note_template_path", fallback="")
     slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
     split_description = config.getboolean("Parser", "split_description", fallback=True)
@@ -30,6 +31,7 @@ def get_config(config_path="config.ini"):
         "active_conversation": active_conversation,
         "auto_create_project": auto_create_project,
         "ensure_root_note": ensure_root_note,
+        "ensure_active_conversation": ensure_active_conversation,
         "root_note_template_path": root_note_template_path.strip(),
         "slug_word_count": slug_word_count,
         "split_description": split_description,
