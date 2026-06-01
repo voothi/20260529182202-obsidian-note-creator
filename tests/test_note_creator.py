@@ -244,6 +244,46 @@ I have identified exactly why the ZID duplication occurred and have successfully
             if os.path.exists(mock_conv_path):
                 os.remove(mock_conv_path)
 
+    def test_update_conversation_moc_ignores_inline_moc_text_in_link_titles(self):
+        """
+        Verify MOC header detection uses exact section headers, not '## MOC.' text inside links.
+        """
+        from note_creator import update_conversation_moc
+
+        mock_conv_path = "mock_conversation_inline_moc_text.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                "# Active Conversation\n"
+                "## MOC.\n"
+                "- [[20260601105049-lets-see-how-the|Contains ## MOC. in title]]\n"
+                "- [[20260601111135-check-that-this-works|Second item]]\n"
+                "## Notes\n"
+            )
+
+        try:
+            changed = update_conversation_moc(
+                mock_conv_path,
+                ["- [[20260601114003-double-check-why-in-the|Third item]]\n"],
+                dry_run=False
+            )
+            self.assertTrue(changed)
+
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+            self.assertEqual("".join(lines).count("[[20260601114003-double-check-why-in-the|Third item]]"), 1)
+            self.assertEqual(
+                lines[moc_idx + 2].strip(),
+                "- [[20260601105049-lets-see-how-the|Contains ## MOC. in title]]"
+            )
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
     def test_discover_active_conversation(self):
         """
         Verify that discover_active_conversation correctly detects the chronologically

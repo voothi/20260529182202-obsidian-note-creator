@@ -468,16 +468,8 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
     content_lines = original_content.splitlines(keepends=True)
     eol_chars = _resolve_eol_chars(eol_mode, original_content)
         
-    # Find MOC section
-    moc_start_idx = -1
-    notes_section_idx = -1
-    
-    for i, line in enumerate(content_lines):
-        if "## MOC." in line:
-            moc_start_idx = i
-        elif "## Notes" in line and moc_start_idx != -1:
-            notes_section_idx = i
-            break
+    # Find MOC section using exact headers only, not substring matches in link text.
+    moc_start_idx, notes_section_idx = _extract_moc_bounds(content_lines)
             
     if moc_start_idx == -1 or notes_section_idx == -1:
         print("[Error] Could not locate '## MOC.' or '## Notes' in the conversation file.")
