@@ -585,6 +585,21 @@ Reviewed commit id.
             if os.path.exists(cfg_dir):
                 os.rmdir(cfg_dir)
 
+    def test_get_config_parses_eol_mode(self):
+        """
+        Verify the EOL mode is parsed from config.
+        """
+        cfg_path = "mock_eol_config.ini"
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                f.write("[Obsidian]\neol = crlf\n")
+            cfg = get_config(cfg_path)
+            self.assertIn("eol", cfg)
+            self.assertEqual(cfg["eol"], "crlf")
+        finally:
+            if os.path.exists(cfg_path):
+                os.remove(cfg_path)
+
     def test_initialize_active_conversation_uses_template_placeholders(self):
         """
         Verify conversation template placeholders {ZID}/{CREATED_DATE} are rendered.

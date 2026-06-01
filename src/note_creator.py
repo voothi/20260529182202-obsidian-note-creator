@@ -17,6 +17,28 @@ except ImportError:
 ZID_LINE_REGEX = re.compile(r'^(\s*(?:(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s+)?)(\d{14})\s+(.*)$')
 SIMPLE_ZID_REGEX = re.compile(r'^(\d{14})\s+(.*)$', re.DOTALL)
 
+def _normalize_eol_mode(eol_mode):
+    mode = (eol_mode or "lf").strip().lower()
+    return mode if mode in ("lf", "crlf", "auto") else "lf"
+
+def _detect_existing_eol(text):
+    if "\r\n" in text:
+        return "\r\n"
+    return "\n"
+
+def _resolve_eol_chars(eol_mode, existing_text=None):
+    mode = _normalize_eol_mode(eol_mode)
+    if mode == "lf":
+        return "\n"
+    if mode == "crlf":
+        return "\r\n"
+    if existing_text is not None:
+        return _detect_existing_eol(existing_text)
+    return os.linesep
+
+def _normalize_text_eol(text, eol_chars):
+    return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", eol_chars)
+
 def generate_note_content(task_name, description, parent_title, created_date):
     """
     Generates standard markdown note content with templates matching the Obsidian system.
@@ -147,6 +169,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     split_description = config["split_description"]
     use_one_to_one = force_one_to_one if force_one_to_one is not None else config.get("one_to_one", True)
     created_date = datetime.now().strftime("%Y-%m-%d")
+    eol_chars = _resolve_eol_chars(config.get("eol", "lf"))
     # 1. Scan lines to find a ZID that acts as a prefix or header (ignoring service lines)
     # Match pattern supporting headers (###), lists (- [ ]), quotes (>), bold/italic markers
     zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?\s*[`"\']?(\d{14})\b')
@@ -283,8 +306,8 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
             print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
         else:
             note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
-            with open(note_filepath, "w", encoding="utf-8", newline="\n") as f:
-                f.write(note_content)
+            with open(note_filepath, "w", encoding="utf-8", newline="") as f:
+                f.write(_normalize_text_eol(note_content, eol_chars))
             print(f"    [+] Created Note: {note_filepath}")
             
     # Return formatted MOC link
@@ -304,6 +327,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
     use_one_to_one = force_one_to_one if force_one_to_one is not None else config.get("one_to_one", True)
     
     created_date = datetime.now().strftime("%Y-%m-%d")
+    eol_chars = _resolve_eol_chars(config.get("eol", "lf"))
     
     updated_lines = []
     notes_created = 0
@@ -360,8 +384,8 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                     print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
                 else:
                     note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
-                    with open(note_filepath, "w", encoding="utf-8", newline="\n") as f:
-                        f.write(note_content)
+                    with open(note_filepath, "w", encoding="utf-8", newline="") as f:
+                        f.write(_normalize_text_eol(note_content, eol_chars))
                     print(f"    [+] Created Note: {note_filepath}")
                     notes_created += 1
             else:
@@ -416,8 +440,8 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                         print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
                     else:
                         note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
-                        with open(note_filepath, "w", encoding="utf-8", newline="\n") as f:
-                            f.write(note_content)
+                        with open(note_filepath, "w", encoding="utf-8", newline="") as f:
+                            f.write(_normalize_text_eol(note_content, eol_chars))
                         print(f"    [+] Created Note: {note_filepath}")
                         notes_created += 1
                 else:
@@ -431,7 +455,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 
     return updated_lines, notes_created
 
-def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
+def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_mode="lf"):
     """
     Updates the active conversation MOC section with the newly formatted links.
     """
@@ -440,7 +464,9 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         return False
         
     with open(active_conv_path, "r", encoding="utf-8") as f:
-        content_lines = f.readlines()
+        original_content = f.read()
+    content_lines = original_content.splitlines(keepends=True)
+    eol_chars = _resolve_eol_chars(eol_mode, original_content)
         
     # Find MOC section
     moc_start_idx = -1
@@ -493,13 +519,13 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
     normalized_new_lines = []
     for line in filtered_new_moc_lines:
         # Normalize incoming lines to LF to avoid CRLF double-spacing on Windows rewrites.
-        normalized_new_lines.append(f"{line.rstrip('\r\n')}\n")
+        normalized_new_lines.append(f"{line.rstrip('\r\n')}{eol_chars}")
 
     # Insert new lines within the MOC section
     updated_moc_block = moc_block[:insert_position] + normalized_new_lines + moc_block[insert_position:]
     # Keep one markdown blank line after '## MOC.' and before '## Notes'
     trimmed_moc_block = [line for line in updated_moc_block if line.strip()]
-    normalized_moc_section = ["\n"] + trimmed_moc_block + ["\n"]
+    normalized_moc_section = [eol_chars] + trimmed_moc_block + [eol_chars]
     updated_content = (
         content_lines[:moc_start_idx + 1]
         + normalized_moc_section
@@ -507,8 +533,9 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
     )
     
     if not dry_run:
-        with open(active_conv_path, "w", encoding="utf-8", newline="\n") as f:
-            f.writelines(updated_content)
+        content_to_write = _normalize_text_eol("".join(updated_content), eol_chars)
+        with open(active_conv_path, "w", encoding="utf-8", newline="") as f:
+            f.write(content_to_write)
         print(f"[+] Successfully updated MOC in active conversation: {os.path.basename(active_conv_path)}")
     else:
         print(f"[Dry-run] Would update MOC in active conversation: {os.path.basename(active_conv_path)}")
@@ -634,7 +661,7 @@ def _apply_up_block(content, up_lines):
         return re.sub(r'^---\s*(\r?\n)', f"---\n{new_up_block}\n", content, count=1)
     return content
 
-def initialize_active_conversation(conversations_dir, template_path="", root_path=""):
+def initialize_active_conversation(conversations_dir, template_path="", root_path="", eol_mode="lf"):
     """
     Creates a template active conversation note in conversations_dir and returns its path.
     """
@@ -684,13 +711,14 @@ due:
         variables={"ZID": now_zid, "CREATED_DATE": created_date, "UP_LINES": up_lines}
     )
     conv_content = _apply_up_block(conv_content, up_lines)
-    with open(new_conv_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(conv_content)
+    eol_chars = _resolve_eol_chars(eol_mode)
+    with open(new_conv_path, "w", encoding="utf-8", newline="") as f:
+        f.write(_normalize_text_eol(conv_content, eol_chars))
         
     print(f"[+] Initialized active conversation file: {new_conv_filename}")
     return new_conv_path
 
-def ensure_root_note(conversations_dir, template_path="", dry_run=False):
+def ensure_root_note(conversations_dir, template_path="", dry_run=False, eol_mode="lf"):
     """
     Ensures conversations_dir/root.md exists. Idempotent by design.
     If template_path is provided and exists, the new file is created from that template.
@@ -709,12 +737,13 @@ def ensure_root_note(conversations_dir, template_path="", dry_run=False):
         print(f"[Dry-run] Would create root note: {root_path}")
         return root_path, True
 
-    with open(root_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(template_content)
+    eol_chars = _resolve_eol_chars(eol_mode)
+    with open(root_path, "w", encoding="utf-8", newline="") as f:
+        f.write(_normalize_text_eol(template_content, eol_chars))
     print(f"[+] Created root note: {root_path}")
     return root_path, True
 
-def ensure_root_moc_contains_conversation(root_path, active_conversation_path, dry_run=False, preferred_parent=None):
+def ensure_root_moc_contains_conversation(root_path, active_conversation_path, dry_run=False, preferred_parent=None, eol_mode="lf"):
     """
     Ensures root.md has a link to the active conversation under '## MOC.'.
     Idempotent: does nothing if the link already exists.
@@ -723,10 +752,13 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
         return False
 
     conv_filename = os.path.splitext(os.path.basename(active_conversation_path))[0]
-    link_line = f"- [[{conv_filename}|Conversation]]\n"
+    eol_chars = _resolve_eol_chars(eol_mode)
+    link_line = f"- [[{conv_filename}|Conversation]]{eol_chars}"
 
     with open(root_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+        root_original_content = f.read()
+    lines = root_original_content.splitlines(keepends=True)
+    eol_chars = _resolve_eol_chars(eol_mode, root_original_content)
 
     moc_idx, notes_idx = _extract_moc_bounds(lines)
 
@@ -753,7 +785,7 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
                     parent_indent_match = re.match(r'^(\s*)', lines[idx])
                     parent_indent = len(parent_indent_match.group(1)) if parent_indent_match else 0
                     child_indent = parent_indent + 4
-                    insert_line = f"{' ' * child_indent}- [[{conv_filename}|Conversation]]\n"
+                    insert_line = f"{' ' * child_indent}- [[{conv_filename}|Conversation]]{eol_chars}"
 
                     insert_pos = idx + 1
                     while insert_pos < moc_end:
@@ -775,14 +807,14 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
         first_after = moc_idx_new + 1
         while first_after < len(updated) and updated[first_after].strip() == "":
             del updated[first_after]
-        updated.insert(first_after, "\n")
+        updated.insert(first_after, eol_chars)
 
         moc_idx_new, notes_idx_new = _extract_moc_bounds(updated)
         if notes_idx_new != -1:
             while notes_idx_new - 1 >= 0 and updated[notes_idx_new - 1].strip() == "":
                 del updated[notes_idx_new - 1]
                 notes_idx_new -= 1
-            updated.insert(notes_idx_new, "\n")
+            updated.insert(notes_idx_new, eol_chars)
 
     if dry_run:
         if not already_exists:
@@ -791,8 +823,9 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
             print("[Dry-run] Would normalize root MOC spacing.")
         return True
 
-    with open(root_path, "w", encoding="utf-8", newline="\n") as f:
-        f.writelines(updated)
+    content_to_write = _normalize_text_eol("".join(updated), eol_chars)
+    with open(root_path, "w", encoding="utf-8", newline="") as f:
+        f.write(content_to_write)
     if not already_exists:
         print(f"[+] Added conversation link to root MOC: {conv_filename}")
     else:
@@ -1001,7 +1034,8 @@ def main():
                 latest_conv = initialize_active_conversation(
                     conversations_dir,
                     config.get("conversation_note_template_path", ""),
-                    os.path.join(conversations_dir, "root.md")
+                    os.path.join(conversations_dir, "root.md"),
+                    config.get("eol", "lf")
                 )
                 
             if latest_conv:
@@ -1023,7 +1057,8 @@ def main():
         root_path, _ = ensure_root_note(
             fallback_conversations,
             config.get("root_note_template_path", ""),
-            args.dry_run
+            args.dry_run,
+            config.get("eol", "lf")
         )
         
     if not os.path.exists(config["active_conversation"]) and config.get("ensure_active_conversation", True):
@@ -1032,7 +1067,8 @@ def main():
             latest_conv = initialize_active_conversation(
                 fallback_conversations,
                 config.get("conversation_note_template_path", ""),
-                root_path or os.path.join(fallback_conversations, "root.md")
+                root_path or os.path.join(fallback_conversations, "root.md"),
+                config.get("eol", "lf")
             )
         config["active_conversation"] = latest_conv
 
@@ -1044,7 +1080,8 @@ def main():
             root_path,
             config["active_conversation"],
             args.dry_run,
-            preferred_parent=preferred_parent
+            preferred_parent=preferred_parent,
+            eol_mode=config.get("eol", "lf")
         )
             
     parent_file = os.path.basename(config["active_conversation"])
@@ -1079,7 +1116,12 @@ def main():
         if not os.path.exists(config["active_conversation"]) and not config.get("ensure_active_conversation", True):
             print("[*] Skipping MOC update because active conversation is missing and ensure_active_conversation is disabled.")
         else:
-            update_conversation_moc(config["active_conversation"], moc_links_only, args.dry_run)
+            update_conversation_moc(
+                config["active_conversation"],
+                moc_links_only,
+                args.dry_run,
+                config.get("eol", "lf")
+            )
         
         # Combine output links for clipboard or printing
         output_links_text = "".join(moc_links_only)

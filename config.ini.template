@@ -30,6 +30,10 @@ tooltip = 4000
 # false = update conversation file only (recommended default)
 auto_paste_wikilinks = false
 
+# Output end-of-line mode for written markdown files:
+# lf = \n, crlf = \r\n, auto = preserve existing file EOL where possible, else OS default.
+eol = lf
+
 [WorkspaceDetection]
 # Base folder that contains vault projects (final write target resolves to: vault_base\<project>\conversations).
 vault_base = U:\voothi.vault
