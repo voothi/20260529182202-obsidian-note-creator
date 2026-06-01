@@ -39,6 +39,10 @@ def _resolve_eol_chars(eol_mode, existing_text=None):
 def _normalize_text_eol(text, eol_chars):
     return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", eol_chars)
 
+def _normalize_moc_spacing_mode(mode):
+    value = (mode or "normalize").strip().lower()
+    return value if value in ("normalize", "preserve", "smart") else "normalize"
+
 def generate_note_content(task_name, description, parent_title, created_date):
     """
     Generates standard markdown note content with templates matching the Obsidian system.
@@ -455,7 +459,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 
     return updated_lines, notes_created
 
-def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_mode="lf"):
+def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_mode="lf", moc_spacing_mode="normalize"):
     """
     Updates the active conversation MOC section with the newly formatted links.
     """
@@ -467,6 +471,7 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
         original_content = f.read()
     content_lines = original_content.splitlines(keepends=True)
     eol_chars = _resolve_eol_chars(eol_mode, original_content)
+    spacing_mode = _normalize_moc_spacing_mode(moc_spacing_mode)
         
     # Find MOC section using exact headers only, not substring matches in link text.
     moc_start_idx, notes_section_idx = _extract_moc_bounds(content_lines)
@@ -492,7 +497,10 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
         filtered_new_moc_lines.append(line)
         
     if not filtered_new_moc_lines:
-        print("[*] No new links to add to the MOC (all already linked). Normalizing MOC spacing only.")
+        print("[*] No new links to add to the MOC (all already linked).")
+        if spacing_mode != "normalize":
+            return True
+        print("[*] Normalizing MOC spacing only.")
         
     # We find where to append our new lines in the list of MOC items.
     # Typically, we can append them at the end of the existing list items.
@@ -502,27 +510,38 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
             last_item_idx = i
             break
             
-    if last_item_idx == -1:
-        # No existing list items, insert at start of MOC block.
-        insert_position = 0
-    else:
-        insert_position = last_item_idx + 1
-
     normalized_new_lines = []
     for line in filtered_new_moc_lines:
         # Normalize incoming lines to LF to avoid CRLF double-spacing on Windows rewrites.
         normalized_new_lines.append(f"{line.rstrip('\r\n')}{eol_chars}")
 
-    # Insert new lines within the MOC section
-    updated_moc_block = moc_block[:insert_position] + normalized_new_lines + moc_block[insert_position:]
-    # Keep one markdown blank line after '## MOC.' and before '## Notes'
-    trimmed_moc_block = [line for line in updated_moc_block if line.strip()]
-    normalized_moc_section = [eol_chars] + trimmed_moc_block + [eol_chars]
-    updated_content = (
-        content_lines[:moc_start_idx + 1]
-        + normalized_moc_section
-        + content_lines[notes_section_idx:]
-    )
+    if last_item_idx == -1:
+        # First insertion in a new/empty MOC keeps the entry visually centered.
+        normalized_moc_section = [eol_chars] + normalized_new_lines + [eol_chars]
+        updated_content = (
+            content_lines[:moc_start_idx + 1]
+            + normalized_moc_section
+            + content_lines[notes_section_idx:]
+        )
+    else:
+        insert_position = last_item_idx + 1
+        updated_moc_block = moc_block[:insert_position] + normalized_new_lines + moc_block[insert_position:]
+        if spacing_mode == "normalize":
+            # Keep one markdown blank line after '## MOC.' and before '## Notes'
+            trimmed_moc_block = [line for line in updated_moc_block if line.strip()]
+            normalized_moc_section = [eol_chars] + trimmed_moc_block + [eol_chars]
+            updated_content = (
+                content_lines[:moc_start_idx + 1]
+                + normalized_moc_section
+                + content_lines[notes_section_idx:]
+            )
+        else:
+            # Preserve existing spacing for already-managed files.
+            updated_content = (
+                content_lines[:moc_start_idx + 1]
+                + updated_moc_block
+                + content_lines[notes_section_idx:]
+            )
     
     if not dry_run:
         content_to_write = _normalize_text_eol("".join(updated_content), eol_chars)
@@ -1112,7 +1131,8 @@ def main():
                 config["active_conversation"],
                 moc_links_only,
                 args.dry_run,
-                config.get("eol", "lf")
+                config.get("eol", "lf"),
+                config.get("moc_spacing_mode", "normalize")
             )
         
         # Combine output links for clipboard or printing

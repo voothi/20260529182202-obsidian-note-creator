@@ -284,6 +284,72 @@ I have identified exactly why the ZID duplication occurred and have successfully
             if os.path.exists(mock_conv_path):
                 os.remove(mock_conv_path)
 
+    def test_update_conversation_moc_preserve_mode_keeps_existing_spacing(self):
+        """
+        Verify preserve mode appends links without collapsing existing blank lines.
+        """
+        from note_creator import update_conversation_moc
+
+        mock_conv_path = "mock_conversation_preserve_mode.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                "# Active Conversation\n"
+                "## MOC.\n"
+                "\n"
+                "- [[20260601111135-check-that-this-works|First]]\n"
+                "\n"
+                "\n"
+                "## Notes\n"
+            )
+
+        try:
+            changed = update_conversation_moc(
+                mock_conv_path,
+                ["- [[20260601114706-relaxed-moc-spacing|Second]]\n"],
+                dry_run=False,
+                moc_spacing_mode="preserve"
+            )
+            self.assertTrue(changed)
+
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn("\n\n\n## Notes\n", content)
+            self.assertIn("- [[20260601114706-relaxed-moc-spacing|Second]]", content)
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
+    def test_update_conversation_moc_smart_mode_centers_first_entry(self):
+        """
+        Verify smart mode centers first insertion in an empty/new MOC section.
+        """
+        from note_creator import update_conversation_moc
+
+        mock_conv_path = "mock_conversation_smart_mode_first_insert.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("# Active Conversation\n## MOC.\n\n\n\n## Notes\n")
+
+        try:
+            changed = update_conversation_moc(
+                mock_conv_path,
+                ["- [[20260601114706-relaxed-moc-spacing|First]]\n"],
+                dry_run=False,
+                moc_spacing_mode="smart"
+            )
+            self.assertTrue(changed)
+
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[moc_idx + 2].strip(), "- [[20260601114706-relaxed-moc-spacing|First]]")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
     def test_discover_active_conversation(self):
         """
         Verify that discover_active_conversation correctly detects the chronologically
@@ -636,6 +702,21 @@ Reviewed commit id.
             cfg = get_config(cfg_path)
             self.assertIn("eol", cfg)
             self.assertEqual(cfg["eol"], "crlf")
+        finally:
+            if os.path.exists(cfg_path):
+                os.remove(cfg_path)
+
+    def test_get_config_parses_moc_spacing_mode(self):
+        """
+        Verify MOC spacing mode is parsed from config.
+        """
+        cfg_path = "mock_moc_spacing_config.ini"
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                f.write("[Obsidian]\nmoc_spacing_mode = preserve\n")
+            cfg = get_config(cfg_path)
+            self.assertIn("moc_spacing_mode", cfg)
+            self.assertEqual(cfg["moc_spacing_mode"], "preserve")
         finally:
             if os.path.exists(cfg_path):
                 os.remove(cfg_path)
