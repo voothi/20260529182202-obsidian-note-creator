@@ -283,7 +283,7 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
             print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
         else:
             note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
-            with open(note_filepath, "w", encoding="utf-8") as f:
+            with open(note_filepath, "w", encoding="utf-8", newline="\n") as f:
                 f.write(note_content)
             print(f"    [+] Created Note: {note_filepath}")
             
@@ -360,7 +360,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                     print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
                 else:
                     note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
-                    with open(note_filepath, "w", encoding="utf-8") as f:
+                    with open(note_filepath, "w", encoding="utf-8", newline="\n") as f:
                         f.write(note_content)
                     print(f"    [+] Created Note: {note_filepath}")
                     notes_created += 1
@@ -416,7 +416,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                         print(f"    [!] Note '{note_filepath}' already exists. Skipping file creation.")
                     else:
                         note_content = generate_note_content(clean_task_name, note_description, parent_title, created_date)
-                        with open(note_filepath, "w", encoding="utf-8") as f:
+                        with open(note_filepath, "w", encoding="utf-8", newline="\n") as f:
                             f.write(note_content)
                         print(f"    [+] Created Note: {note_filepath}")
                         notes_created += 1
@@ -684,7 +684,7 @@ due:
         variables={"ZID": now_zid, "CREATED_DATE": created_date, "UP_LINES": up_lines}
     )
     conv_content = _apply_up_block(conv_content, up_lines)
-    with open(new_conv_path, "w", encoding="utf-8") as f:
+    with open(new_conv_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(conv_content)
         
     print(f"[+] Initialized active conversation file: {new_conv_filename}")
@@ -709,7 +709,7 @@ def ensure_root_note(conversations_dir, template_path="", dry_run=False):
         print(f"[Dry-run] Would create root note: {root_path}")
         return root_path, True
 
-    with open(root_path, "w", encoding="utf-8") as f:
+    with open(root_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(template_content)
     print(f"[+] Created root note: {root_path}")
     return root_path, True
@@ -791,7 +791,7 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
             print("[Dry-run] Would normalize root MOC spacing.")
         return True
 
-    with open(root_path, "w", encoding="utf-8") as f:
+    with open(root_path, "w", encoding="utf-8", newline="\n") as f:
         f.writelines(updated)
     if not already_exists:
         print(f"[+] Added conversation link to root MOC: {conv_filename}")
