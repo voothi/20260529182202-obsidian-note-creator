@@ -905,10 +905,15 @@ def main():
                 workspace_title_suffixes,
             )
             potential_dir = os.path.join(vault_base, normalized)
-            if normalized and os.path.exists(potential_dir) and os.path.isdir(potential_dir):
-                project_name = normalized
-                print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
-                break
+            if normalized:
+                if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
+                    project_name = normalized
+                    print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
+                    break
+                if config.get("auto_create_project", False):
+                    project_name = normalized
+                    print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint (will auto-create).")
+                    break
 
         try:
             workspace_tokens = re.findall(workspace_slug_pattern, args.workspace)
