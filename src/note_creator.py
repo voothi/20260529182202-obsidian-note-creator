@@ -474,8 +474,7 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
         filtered_new_moc_lines.append(line)
         
     if not filtered_new_moc_lines:
-        print("[*] No new links to add to the MOC (all already linked).")
-        return True
+        print("[*] No new links to add to the MOC (all already linked). Normalizing MOC spacing only.")
         
     # We find where to append our new lines in the list of MOC items.
     # Typically, we can append them at the end of the existing list items.
@@ -486,13 +485,25 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
             break
             
     if last_item_idx == -1:
-        # No existing list items, insert directly after ## MOC.
-        insert_position = moc_start_idx + 1
+        # No existing list items, insert at start of MOC block.
+        insert_position = 0
     else:
-        insert_position = moc_start_idx + 1 + last_item_idx + 1
-        
-    # Insert new lines
-    updated_content = content_lines[:insert_position] + filtered_new_moc_lines + content_lines[insert_position:]
+        insert_position = last_item_idx + 1
+
+    normalized_new_lines = []
+    for line in filtered_new_moc_lines:
+        normalized_new_lines.append(line if line.endswith("\n") else f"{line}\n")
+
+    # Insert new lines within the MOC section
+    updated_moc_block = moc_block[:insert_position] + normalized_new_lines + moc_block[insert_position:]
+    # Keep one markdown blank line after '## MOC.' and before '## Notes'
+    trimmed_moc_block = [line for line in updated_moc_block if line.strip()]
+    normalized_moc_section = ["\n"] + trimmed_moc_block + ["\n"]
+    updated_content = (
+        content_lines[:moc_start_idx + 1]
+        + normalized_moc_section
+        + content_lines[notes_section_idx:]
+    )
     
     if not dry_run:
         with open(active_conv_path, "w", encoding="utf-8") as f:

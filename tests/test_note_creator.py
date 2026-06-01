@@ -155,6 +155,65 @@ I have identified exactly why the ZID duplication occurred and have successfully
             if os.path.exists(mock_conv_path):
                 os.remove(mock_conv_path)
 
+    def test_update_conversation_moc_keeps_blank_line_boundaries(self):
+        """
+        Verify one empty line exists after '## MOC.' and before '## Notes' after insertion.
+        """
+        from note_creator import update_conversation_moc
+
+        mock_conv_path = "mock_conversation_spacing.md"
+        with open(mock_conv_path, "w", encoding="utf-8") as f:
+            f.write("# Active Conversation\n## MOC.\n## Notes\n")
+
+        try:
+            new_moc_lines = ["- [[20260601104007-write-readme|Write README]]\n"]
+            changed = update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False)
+            self.assertTrue(changed)
+
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+            self.assertEqual(lines[moc_idx + 2].strip(), "- [[20260601104007-write-readme|Write README]]")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
+    def test_update_conversation_moc_normalizes_spacing_when_link_exists(self):
+        """
+        Verify spacing is normalized even when all incoming links are duplicates.
+        """
+        from note_creator import update_conversation_moc
+
+        mock_conv_path = "mock_conversation_spacing_existing.md"
+        with open(mock_conv_path, "w", encoding="utf-8") as f:
+            f.write(
+                "# Active Conversation\n"
+                "## MOC.\n"
+                "- [[20260601104007-write-readme|Write README]]\n"
+                "## Notes\n"
+            )
+
+        try:
+            new_moc_lines = ["- [[20260601104007-write-readme|Write README]]\n"]
+            changed = update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False)
+            self.assertTrue(changed)
+
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+            self.assertEqual("".join(lines).count("[[20260601104007-write-readme|Write README]]"), 1)
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
     def test_discover_active_conversation(self):
         """
         Verify that discover_active_conversation correctly detects the chronologically
