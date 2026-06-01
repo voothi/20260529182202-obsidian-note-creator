@@ -214,6 +214,36 @@ I have identified exactly why the ZID duplication occurred and have successfully
             if os.path.exists(mock_conv_path):
                 os.remove(mock_conv_path)
 
+    def test_update_conversation_moc_normalizes_crlf_input_lines(self):
+        """
+        Verify CRLF input lines do not produce doubled blank lines on Windows.
+        """
+        from note_creator import update_conversation_moc
+
+        mock_conv_path = "mock_conversation_crlf.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("# Active Conversation\n## MOC.\n## Notes\n")
+
+        try:
+            new_moc_lines = ["- [[20260601112154-check-auto-create|Check auto_create_project]]\r\n"]
+            changed = update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False)
+            self.assertTrue(changed)
+
+            with open(mock_conv_path, "rb") as f:
+                raw = f.read()
+            self.assertNotIn(b"\r\r\n", raw)
+
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[moc_idx + 1].strip(), "")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+            self.assertEqual(lines[moc_idx + 2].strip(), "- [[20260601112154-check-auto-create|Check auto_create_project]]")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
     def test_discover_active_conversation(self):
         """
         Verify that discover_active_conversation correctly detects the chronologically

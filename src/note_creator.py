@@ -492,7 +492,8 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
 
     normalized_new_lines = []
     for line in filtered_new_moc_lines:
-        normalized_new_lines.append(line if line.endswith("\n") else f"{line}\n")
+        # Normalize incoming lines to LF to avoid CRLF double-spacing on Windows rewrites.
+        normalized_new_lines.append(f"{line.rstrip('\r\n')}\n")
 
     # Insert new lines within the MOC section
     updated_moc_block = moc_block[:insert_position] + normalized_new_lines + moc_block[insert_position:]
@@ -506,7 +507,7 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False):
     )
     
     if not dry_run:
-        with open(active_conv_path, "w", encoding="utf-8") as f:
+        with open(active_conv_path, "w", encoding="utf-8", newline="\n") as f:
             f.writelines(updated_content)
         print(f"[+] Successfully updated MOC in active conversation: {os.path.basename(active_conv_path)}")
     else:
