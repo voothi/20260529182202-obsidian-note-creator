@@ -1,4 +1,4 @@
-﻿---
+---
 up:
 {UP_LINES}
 aliases: 
