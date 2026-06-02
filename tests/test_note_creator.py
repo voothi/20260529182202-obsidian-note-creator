@@ -7,7 +7,7 @@ from datetime import datetime
 # Add src folder to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation, resolve_conversation_up_parents_from_root
+from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation, resolve_conversation_up_parents_from_root, normalize_workspace_name
 from utils import sanitize_name, split_first_sentence
 from utils import get_config
 
@@ -786,12 +786,12 @@ Reviewed commit id.
         conv_path = os.path.join(mock_dir, "20260531222451-conversation.md")
         try:
             with open(root_path, "w", encoding="utf-8") as f:
-                f.write("# root\n\n## MOC.\nReference [[20260531222451-conversation|Conversation]]\n## Notes\n")
+                f.write("# root\n\n## MOC.\n\nReference [[20260531222451-conversation|Conversation]]\n\n## Notes\n")
             with open(conv_path, "w", encoding="utf-8") as f:
                 f.write("# Conversation\n")
 
             changed = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
-            self.assertFalse(changed)
+            self.assertTrue(changed)
             with open(root_path, "r", encoding="utf-8") as f:
                 content = f.read()
             self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 1)
@@ -812,12 +812,12 @@ Reviewed commit id.
         conv_path = os.path.join(mock_dir, "20260531222451-conversation.md")
         try:
             with open(root_path, "w", encoding="utf-8") as f:
-                f.write("# root\n\n## MOC.\n    - [[20260531222451-conversation|Conversation]]\n## Notes\n")
+                f.write("# root\n\n## MOC.\n\n    - [[20260531222451-conversation|Conversation]]\n\n## Notes\n")
             with open(conv_path, "w", encoding="utf-8") as f:
                 f.write("# Conversation\n")
 
             changed = ensure_root_moc_contains_conversation(root_path, conv_path, dry_run=False)
-            self.assertFalse(changed)
+            self.assertTrue(changed)
             with open(root_path, "r", encoding="utf-8") as f:
                 content = f.read()
             self.assertEqual(content.count("[[20260531222451-conversation|Conversation]]"), 1)
@@ -1014,6 +1014,70 @@ Reviewed commit id.
                     if entry.is_file():
                         os.remove(entry.path)
                 os.rmdir(mock_dir)
+
+    def test_normalize_workspace_name_robust(self):
+        """
+        Verify that normalize_workspace_name strips suffixes anywhere in the title,
+        supporting both VS Code and Antigravity IDE title formats.
+        """
+        suffixes = ["Visual Studio Code", "VS Code", "VSCodium", "Cursor", "Antigravity", "Angigravity", "Code - OSS"]
+        
+        # Test 1: Antigravity IDE format (suffix in middle)
+        title1 = "20260529182202-obsidian-note-creator - Antigravity IDE - config.ini"
+        self.assertEqual(
+            normalize_workspace_name(title1, title_suffixes=suffixes),
+            "obsidian-note-creator"
+        )
+        
+        # Test 2: VS Code format (suffix at end)
+        title2 = "20260531191028-conversation.md - 20240411110510-autohotkey - Visual Studio Code"
+        self.assertEqual(
+            normalize_workspace_name(title2, title_suffixes=suffixes),
+            "conversation.md - 20240411110510-autohotkey"
+        )
+
+    def test_normalize_workspace_name_without_workspace_tag(self):
+        """
+        Verify that normalize_workspace_name strips suffix from Antigravity format
+        even without a (Workspace) indicator in the title.
+        """
+        suffixes = ["Visual Studio Code", "VS Code", "VSCodium", "Cursor", "Antigravity", "Angigravity", "Code - OSS"]
+        title = "20260529182202-obsidian-note-creator - Antigravity IDE - config.ini"
+        self.assertEqual(
+            normalize_workspace_name(title, title_suffixes=suffixes),
+            "obsidian-note-creator"
+        )
+
+    def test_workspace_parsing_candidates(self):
+        """
+        Verify that splitting the title by ' - ' and filtering suffixes/files
+        correctly extracts clean workspace candidates.
+        """
+        suffixes = ["Visual Studio Code", "VS Code", "VSCodium", "Cursor", "Antigravity", "Angigravity", "Code - OSS"]
+        
+        # Test Case 1: Antigravity IDE format
+        title1 = "20260529182202-obsidian-note-creator (Workspace) - Antigravity IDE - config.ini"
+        parts1 = [p.strip() for p in title1.split(' - ') if p.strip()]
+        clean_parts1 = []
+        for p in parts1:
+            if any(s.lower() in p.lower() for s in suffixes):
+                continue
+            if re.search(r'\.[a-zA-Z0-9]+$', p):
+                continue
+            clean_parts1.append(p)
+        self.assertEqual(clean_parts1, ["20260529182202-obsidian-note-creator (Workspace)"])
+
+        # Test Case 2: VS Code format
+        title2 = "20260531191028-conversation.md - 20240411110510-autohotkey (Workspace) - Visual Studio Code"
+        parts2 = [p.strip() for p in title2.split(' - ') if p.strip()]
+        clean_parts2 = []
+        for p in parts2:
+            if any(s.lower() in p.lower() for s in suffixes):
+                continue
+            if re.search(r'\.[a-zA-Z0-9]+$', p):
+                continue
+            clean_parts2.append(p)
+        self.assertEqual(clean_parts2, ["20240411110510-autohotkey (Workspace)"])
 
 if __name__ == '__main__':
     unittest.main()

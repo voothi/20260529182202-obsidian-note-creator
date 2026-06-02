@@ -16,6 +16,7 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+*.ini text eol=crlf
 
 # 4. Web, Configuration, and Styling
 *.css text eol=lf

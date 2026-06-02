@@ -827,6 +827,8 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
                 notes_idx_new -= 1
             updated.insert(notes_idx_new, eol_chars)
 
+    content_to_write = _normalize_text_eol("".join(updated), eol_chars)
+
     if dry_run:
         if not already_exists:
             print(f"[Dry-run] Would add conversation link to root MOC: {conv_filename}")
@@ -834,7 +836,6 @@ def ensure_root_moc_contains_conversation(root_path, active_conversation_path, d
             print("[Dry-run] Would normalize root MOC spacing.")
         return True
 
-    content_to_write = _normalize_text_eol("".join(updated), eol_chars)
     with open(root_path, "w", encoding="utf-8", newline="") as f:
         f.write(content_to_write)
     if not already_exists:
@@ -860,7 +861,8 @@ def normalize_workspace_name(raw_workspace, normalization_patterns=None, title_s
     if suffix_list:
         suffix_expr = "|".join(re.escape(suffix) for suffix in suffix_list if suffix.strip())
         if suffix_expr:
-            workspace_raw = re.sub(rf'\s*-\s*(?:{suffix_expr})\s*$', '', workspace_raw, flags=re.IGNORECASE).strip()
+            pattern = rf'\s*-\s*(?:{suffix_expr})(?:\s+IDE)?(?:\s*-\s*.*|\s*)$'
+            workspace_raw = re.sub(pattern, '', workspace_raw, flags=re.IGNORECASE).strip()
     
     patterns = normalization_patterns or [
         r'^\d{14}[-_\s]*',
@@ -968,9 +970,24 @@ def main():
         if workspace_tokens and isinstance(workspace_tokens[0], tuple):
             workspace_tokens = [token[0] for token in workspace_tokens if token]
         
-        # VSCode titles often contain both file and workspace slugs:
-        # "<file-zid-slug>.md - <workspace-zid-slug> - Visual Studio Code".
-        # Prefer the rightmost token first, then fall back to raw input.
+        # Extract workspace candidates by splitting the title on ' - ' and filtering out editor suffixes and file names
+        parts = [p.strip() for p in args.workspace.split(' - ') if p.strip()]
+        clean_parts = []
+        for p in parts:
+            is_suffix = False
+            for suffix in workspace_title_suffixes:
+                if suffix.lower() in p.lower():
+                    is_suffix = True
+                    break
+            if is_suffix:
+                continue
+            # Filter out elements that look like filenames (ending with an extension like .py, .md, .ini, etc.)
+            if re.search(r'\.[a-zA-Z0-9]+$', p):
+                continue
+            clean_parts.append(p)
+
+        # VSCode/Antigravity titles often contain both file and workspace slugs/names.
+        # Prefer the code-workspace match first, then the rightmost slug token, then clean parts, and finally raw input.
         candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
         try:
             code_workspace_match = re.search(workspace_code_workspace_pattern, args.workspace, re.IGNORECASE)
@@ -979,6 +996,11 @@ def main():
             code_workspace_match = None
         if code_workspace_match:
             candidate_tokens.insert(0, code_workspace_match.group(1))
+        
+        for p in reversed(clean_parts):
+            if p not in candidate_tokens:
+                candidate_tokens.append(p)
+                
         candidate_tokens.append(args.workspace)
         
         seen_candidates = set()
@@ -995,9 +1017,18 @@ def main():
                 
             seen_candidates.add(normalized)
             potential_dir = os.path.join(vault_base, normalized)
+            
+            # If the candidate appears as a file name with extension in the workspace title,
+            # we should not treat it as a project candidate for auto-creation.
+            is_file = bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', args.workspace, re.IGNORECASE))
+            
             if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
                 project_name = normalized
                 print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
+                break
+            if config.get("auto_create_project", False) and not is_file:
+                project_name = normalized
+                print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window (will auto-create).")
                 break
             
     # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
