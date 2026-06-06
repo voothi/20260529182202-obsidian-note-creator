@@ -53,7 +53,7 @@ class TestNoteCreator(unittest.TestCase):
         """
         Verify that sanitize_name creates correct slugs, matching Obsidian Templater.
         """
-        self.assertEqual(sanitize_name("Ran command: openspec update", 4), "ran-command--openspec-update")
+        self.assertEqual(sanitize_name("Ran command: openspec update", 4), "ran-command-openspec-update")
         self.assertEqual(sanitize_name("Check the original logic and--open", 4), "check-the-original-logic")
         self.assertEqual(sanitize_name("My cool task name", 2), "my-cool")
 

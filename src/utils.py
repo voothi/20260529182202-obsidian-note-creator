@@ -127,7 +127,8 @@ def sanitize_name(input_string, slug_word_count=4):
     first_words = words[:slug_word_count]
     
     final_name = '-'.join(first_words)
-    final_name = re.sub(r'-+$', '', final_name)
+    final_name = re.sub(r'-+', '-', final_name)
+    final_name = final_name.strip('-')
     
     return final_name.lower()
 
