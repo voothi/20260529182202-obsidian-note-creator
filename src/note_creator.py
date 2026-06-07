@@ -176,7 +176,10 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
     eol_chars = _resolve_eol_chars(config.get("eol", "lf"))
     # 1. Scan lines to find a ZID that acts as a prefix or header (ignoring service lines)
     # Match pattern supporting headers (###), lists (- [ ]), quotes (>), bold/italic markers
-    zid_header_pattern = re.compile(r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?\s*[`"\']?(\d{14})\b')
+    zid_header_pattern = re.compile(
+        r'^\s*(?:[-*+>#]|\d+\.)*(?:\s+\[[ xX]\])?\s*(?:\*\*|__|[*_])?\s*(?:ZID\s*:\s*)?[`"\']?(\d{14})\b',
+        re.IGNORECASE
+    )
     lines = text.splitlines()
     
     # Load ignore prefixes dynamically from configuration

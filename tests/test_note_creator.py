@@ -586,6 +586,35 @@ Reviewed commit id.
             self.assertEqual(count, 1)
             self.assertTrue(links[0].startswith("- [[20260531210151-"))
 
+    def test_process_single_message_block_labeled_zid_header(self):
+        """
+        Verify a "ZID: 202..." header uses the numeric ZID and does not put
+        the label into the generated file name.
+        """
+        config = {
+            "conversations_dir": ".",
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 4,
+            "split_description": True,
+            "one_to_one": True,
+            "ignore_prefixes": []
+        }
+
+        text = """ZID: 20260607224326
+
+**Findings**
+Medium: [scripts/kardenwort/main.lua](u:/voothi/project/main.lua:6710) noisy logging.
+"""
+        links, count = process_single_message_block(
+            text, config, parent_title="test-conversation", dry_run=True
+        )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(
+            links[0],
+            "- [[20260607224326-findings|Findings]]\n"
+        )
+
     def test_ensure_root_note_idempotent_with_template(self):
         """
         Verify root.md is created once from template and then left unchanged on repeat calls.
