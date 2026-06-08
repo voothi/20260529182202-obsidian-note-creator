@@ -516,7 +516,8 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
     normalized_new_lines = []
     for line in filtered_new_moc_lines:
         # Normalize incoming lines to LF to avoid CRLF double-spacing on Windows rewrites.
-        normalized_new_lines.append(f"{line.rstrip('\r\n')}{eol_chars}")
+        stripped_line = line.rstrip('\r\n')
+        normalized_new_lines.append(f"{stripped_line}{eol_chars}")
 
     if last_item_idx == -1:
         # First insertion in a new/empty MOC keeps the entry visually centered.
