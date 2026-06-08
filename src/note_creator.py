@@ -975,8 +975,22 @@ def main():
         
         # Extract workspace candidates by splitting the title on ' - ' and filtering out editor suffixes and file names
         parts = [p.strip() for p in args.workspace.split(' - ') if p.strip()]
+        
+        is_obsidian = "obsidian" in args.workspace.lower()
+        if is_obsidian:
+            if "obsidian" not in [s.lower() for s in workspace_title_suffixes]:
+                workspace_title_suffixes.append("Obsidian")
+                
+        if is_obsidian and parts:
+            note_title = parts[0]
+            workspace_tokens = [t for t in workspace_tokens if t != note_title]
+
         clean_parts = []
-        for p in parts:
+        for idx, p in enumerate(parts):
+            if is_obsidian and idx == 0:
+                continue
+            if vault_base and p.lower() == os.path.basename(vault_base).lower():
+                continue
             is_suffix = False
             for suffix in workspace_title_suffixes:
                 if suffix.lower() in p.lower():
@@ -1004,7 +1018,8 @@ def main():
             if p not in candidate_tokens:
                 candidate_tokens.append(p)
                 
-        candidate_tokens.append(args.workspace)
+        if not is_obsidian:
+            candidate_tokens.append(args.workspace)
         
         seen_candidates = set()
         for candidate in candidate_tokens:

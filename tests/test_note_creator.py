@@ -1108,5 +1108,23 @@ Medium: [scripts/kardenwort/main.lua](u:/voothi/project/main.lua:6710) noisy log
             clean_parts2.append(p)
         self.assertEqual(clean_parts2, ["20240411110510-autohotkey (Workspace)"])
 
+        # Test Case 3: Obsidian format
+        title3 = "20260608122139-conversation - voothi.vault - Obsidian v1.8.4"
+        parts3 = [p.strip() for p in title3.split(' - ') if p.strip()]
+        is_obsidian = "obsidian" in title3.lower()
+        suffixes_with_obs = suffixes + ["Obsidian"]
+        clean_parts3 = []
+        for idx, p in enumerate(parts3):
+            if is_obsidian and idx == 0:
+                continue
+            if p.lower() == "voothi.vault":
+                continue
+            if any(s.lower() in p.lower() for s in suffixes_with_obs):
+                continue
+            if re.search(r'\.[a-zA-Z0-9]+$', p):
+                continue
+            clean_parts3.append(p)
+        self.assertEqual(clean_parts3, [])
+
 if __name__ == '__main__':
     unittest.main()
