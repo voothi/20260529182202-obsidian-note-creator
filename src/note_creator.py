@@ -997,7 +997,7 @@ def main():
             # Extract workspace candidates by splitting the title on ' - ' and filtering out editor suffixes and file names
             parts = [p.strip() for p in args.workspace.split(' - ') if p.strip()]
             
-            is_obsidian = bool(re.search(r'\s*-\s*Obsidian\b', args.workspace, re.IGNORECASE))
+            is_obsidian = bool(re.search(r'\s+-\s+Obsidian\b', args.workspace, re.IGNORECASE))
             if is_obsidian:
                 if "obsidian" not in [s.lower() for s in workspace_title_suffixes]:
                     workspace_title_suffixes.append("Obsidian")
@@ -1043,9 +1043,8 @@ def main():
                 candidate_tokens.append(args.workspace)
             
             seen_candidates = set()
+            candidate_norms = []
             for candidate in candidate_tokens:
-                if project_name:
-                    break
                 normalized = normalize_workspace_name(
                     candidate,
                     workspace_normalization_patterns,
@@ -1053,22 +1052,28 @@ def main():
                 )
                 if not normalized or normalized in seen_candidates:
                     continue
-                    
                 seen_candidates.add(normalized)
+                
+                has_extension = bool(re.search(r'\.[a-zA-Z0-9\-]+(?:\b|$)', candidate))
+                is_file = has_extension or bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', args.workspace, re.IGNORECASE))
+                is_git_temp = any(token in candidate for token in ["(Working Tree)", "(Revision)", "(Git", "(Index)", "(HEAD)"])
+                candidate_norms.append((candidate, normalized, is_file or is_git_temp))
+
+            # Pass 1: Check existing folder
+            for candidate, normalized, is_file in candidate_norms:
                 potential_dir = os.path.join(vault_base, normalized)
-                
-                # If the candidate appears as a file name with extension in the workspace title,
-                # we should not treat it as a project candidate for auto-creation.
-                is_file = bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', args.workspace, re.IGNORECASE))
-                
                 if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
                     project_name = normalized
                     print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
                     break
-                if config.get("auto_create_project", False) and not is_file:
-                    project_name = normalized
-                    print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window (will auto-create).")
-                    break
+
+            # Pass 2: Auto-creation fallback
+            if not project_name and config.get("auto_create_project", False):
+                for candidate, normalized, is_file in candidate_norms:
+                    if not is_file:
+                        project_name = normalized
+                        print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window (will auto-create).")
+                        break
             
     # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
     if not project_name:

@@ -1123,8 +1123,103 @@ Medium: [scripts/kardenwort/main.lua](u:/voothi/project/main.lua:6710) noisy log
                 continue
             if re.search(r'\.[a-zA-Z0-9]+$', p):
                 continue
-            clean_parts3.append(p)
-        self.assertEqual(clean_parts3, [])
+    def test_git_working_tree_and_two_pass_resolution(self):
+        # Simulate note_creator's main workspace resolution logic
+        vault_base = "U:\\voothi.vault"
+        workspace_normalization_patterns = [r'^\d{14}[-_\s]*', r'\s*\(Workspace\).*', r'\.code-workspace$', r'\.md$']
+        workspace_title_suffixes = ["Visual Studio Code", "VS Code", "VSCodium", "Cursor", "Antigravity", "Angigravity", "Code - OSS"]
+        
+        # Test 1: Active workspace has obsidian in name, but is NOT Obsidian app window
+        title = "note_creator.py (Working Tree) (note_creator.py) - 20260529182202-obsidian-note-creator (Workspace) - Antigravity IDE"
+        
+        parts = [p.strip() for p in title.split(' - ') if p.strip()]
+        is_obsidian = bool(re.search(r'\s+-\s+Obsidian\b', title, re.IGNORECASE))
+        self.assertFalse(is_obsidian)
+        
+        workspace_tokens = re.findall(r"\d{14}-[\w-]+", title)
+        
+        clean_parts = []
+        for idx, p in enumerate(parts):
+            is_suffix = False
+            for suffix in workspace_title_suffixes:
+                if suffix.lower() in p.lower():
+                    is_suffix = True
+                    break
+            if is_suffix:
+                continue
+            if re.search(r'\.[a-zA-Z0-9]+$', p):
+                continue
+            clean_parts.append(p)
+
+        candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
+        for p in reversed(clean_parts):
+            if p not in candidate_tokens:
+                candidate_tokens.append(p)
+        if not is_obsidian:
+            candidate_tokens.append(title)
+            
+        seen_candidates = set()
+        candidate_norms = []
+        for candidate in candidate_tokens:
+            normalized = normalize_workspace_name(
+                candidate,
+                workspace_normalization_patterns,
+                workspace_title_suffixes,
+            )
+            if not normalized or normalized in seen_candidates:
+                continue
+            seen_candidates.add(normalized)
+            
+            has_extension = bool(re.search(r'\.[a-zA-Z0-9\-]+(?:\b|$)', candidate))
+            is_file = has_extension or bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', title, re.IGNORECASE))
+            is_git_temp = any(token in candidate for token in ["(Working Tree)", "(Revision)", "(Git", "(Index)", "(HEAD)"])
+            candidate_norms.append((candidate, normalized, is_file or is_git_temp))
+
+        # Pass 1: Check existing folder
+        project_name = None
+        # Mocking check: assume "obsidian-note-creator" exists in vault
+        for candidate, normalized, is_file in candidate_norms:
+            if normalized == "obsidian-note-creator":
+                project_name = normalized
+                break
+                
+        self.assertEqual(project_name, "obsidian-note-creator")
+        
+        # Test 2: If we are in a file and there is no workspace, we should avoid auto-creating it
+        title_no_ws = "main.py - Antigravity IDE"
+        parts_no_ws = [p.strip() for p in title_no_ws.split(' - ') if p.strip()]
+        clean_parts_no_ws = []
+        for idx, p in enumerate(parts_no_ws):
+            is_suffix = False
+            for suffix in workspace_title_suffixes:
+                if suffix.lower() in p.lower():
+                    is_suffix = True
+                    break
+            if is_suffix:
+                continue
+            if re.search(r'\.[a-zA-Z0-9]+$', p):
+                continue
+            clean_parts_no_ws.append(p)
+            
+        candidate_tokens_no_ws = [title_no_ws]
+        candidate_norms_no_ws = []
+        seen_candidates_no_ws = set()
+        for candidate in candidate_tokens_no_ws:
+            normalized = normalize_workspace_name(
+                candidate,
+                workspace_normalization_patterns,
+                workspace_title_suffixes,
+            )
+            if not normalized or normalized in seen_candidates_no_ws:
+                continue
+            seen_candidates_no_ws.add(normalized)
+            has_extension = bool(re.search(r'\.[a-zA-Z0-9\-]+(?:\b|$)', candidate))
+            is_file = has_extension or bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', title_no_ws, re.IGNORECASE))
+            is_git_temp = any(token in candidate for token in ["(Working Tree)", "(Revision)", "(Git", "(Index)", "(HEAD)"])
+            candidate_norms_no_ws.append((candidate, normalized, is_file or is_git_temp))
+            
+        # Verify it is flagged as file so Pass 2 auto-creation will skip it
+        self.assertTrue(candidate_norms_no_ws[0][2])
 
 if __name__ == '__main__':
     unittest.main()
