@@ -939,115 +939,136 @@ def main():
     workspace_normalization_patterns = config.get("workspace_normalization_patterns", [])
     workspace_title_suffixes = config.get("workspace_title_suffixes", [])
     if args.workspace:
-        for pattern in workspace_path_patterns:
-            try:
-                path_project_match = re.search(pattern, args.workspace, re.IGNORECASE)
-            except re.error as e:
-                print(f"[Warning] Invalid workspace_path_patterns regex '{pattern}': {e}")
-                continue
-            if not path_project_match:
-                continue
+        # ZID global discovery: search vault_base globally for the note by its ZID to locate its project folder
+        zid_match = re.search(r"\b(\d{14}-[\w-]+)", args.workspace)
+        if zid_match:
+            target_name = zid_match.group(1)
+            if not target_name.lower().endswith(".md"):
+                target_name += ".md"
+            found_path = None
+            for root, dirs, files in os.walk(vault_base):
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                if target_name in files:
+                    found_path = os.path.join(root, target_name)
+                    break
+            if found_path:
+                rel = os.path.relpath(found_path, vault_base)
+                parts = rel.split(os.sep)
+                if parts and parts[0] and parts[0] != "..":
+                    project_name = parts[0]
+                    print(f"[*] Global ZID Discovery - Resolved project '{project_name}' from active note path: {found_path}")
 
-            extracted = path_project_match.group(1).strip()
-            normalized = normalize_workspace_name(
-                extracted,
-                workspace_normalization_patterns,
-                workspace_title_suffixes,
-            )
-            potential_dir = os.path.join(vault_base, normalized)
-            if normalized:
+        if not project_name:
+            for pattern in workspace_path_patterns:
+                try:
+                    path_project_match = re.search(pattern, args.workspace, re.IGNORECASE)
+                except re.error as e:
+                    print(f"[Warning] Invalid workspace_path_patterns regex '{pattern}': {e}")
+                    continue
+                if not path_project_match:
+                    continue
+
+                extracted = path_project_match.group(1).strip()
+                normalized = normalize_workspace_name(
+                    extracted,
+                    workspace_normalization_patterns,
+                    workspace_title_suffixes,
+                )
+                potential_dir = os.path.join(vault_base, normalized)
+                if normalized:
+                    if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
+                        project_name = normalized
+                        print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
+                        break
+                    if config.get("auto_create_project", False):
+                        project_name = normalized
+                        print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint (will auto-create).")
+                        break
+
+        if not project_name:
+            try:
+                workspace_tokens = re.findall(workspace_slug_pattern, args.workspace)
+            except re.error as e:
+                print(f"[Warning] Invalid workspace_slug_pattern regex '{workspace_slug_pattern}': {e}")
+                workspace_tokens = []
+            if workspace_tokens and isinstance(workspace_tokens[0], tuple):
+                workspace_tokens = [token[0] for token in workspace_tokens if token]
+            
+            # Extract workspace candidates by splitting the title on ' - ' and filtering out editor suffixes and file names
+            parts = [p.strip() for p in args.workspace.split(' - ') if p.strip()]
+            
+            is_obsidian = "obsidian" in args.workspace.lower()
+            if is_obsidian:
+                if "obsidian" not in [s.lower() for s in workspace_title_suffixes]:
+                    workspace_title_suffixes.append("Obsidian")
+                    
+            if is_obsidian and parts:
+                note_title = parts[0]
+                workspace_tokens = [t for t in workspace_tokens if t != note_title]
+
+            clean_parts = []
+            for idx, p in enumerate(parts):
+                if is_obsidian and idx == 0:
+                    continue
+                if vault_base and p.lower() == os.path.basename(vault_base).lower():
+                    continue
+                is_suffix = False
+                for suffix in workspace_title_suffixes:
+                    if suffix.lower() in p.lower():
+                        is_suffix = True
+                        break
+                if is_suffix:
+                    continue
+                # Filter out elements that look like filenames (ending with an extension like .py, .md, .ini, etc.)
+                if re.search(r'\.[a-zA-Z0-9]+$', p):
+                    continue
+                clean_parts.append(p)
+
+            # VSCode/Antigravity titles often contain both file and workspace slugs/names.
+            # Prefer the code-workspace match first, then the rightmost slug token, then clean parts, and finally raw input.
+            candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
+            try:
+                code_workspace_match = re.search(workspace_code_workspace_pattern, args.workspace, re.IGNORECASE)
+            except re.error as e:
+                print(f"[Warning] Invalid workspace_code_workspace_pattern regex '{workspace_code_workspace_pattern}': {e}")
+                code_workspace_match = None
+            if code_workspace_match:
+                candidate_tokens.insert(0, code_workspace_match.group(1))
+            
+            for p in reversed(clean_parts):
+                if p not in candidate_tokens:
+                    candidate_tokens.append(p)
+                    
+            if not is_obsidian:
+                candidate_tokens.append(args.workspace)
+            
+            seen_candidates = set()
+            for candidate in candidate_tokens:
+                if project_name:
+                    break
+                normalized = normalize_workspace_name(
+                    candidate,
+                    workspace_normalization_patterns,
+                    workspace_title_suffixes,
+                )
+                if not normalized or normalized in seen_candidates:
+                    continue
+                    
+                seen_candidates.add(normalized)
+                potential_dir = os.path.join(vault_base, normalized)
+                
+                # If the candidate appears as a file name with extension in the workspace title,
+                # we should not treat it as a project candidate for auto-creation.
+                is_file = bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', args.workspace, re.IGNORECASE))
+                
                 if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
                     project_name = normalized
-                    print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint.")
+                    print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
                     break
-                if config.get("auto_create_project", False):
+                if config.get("auto_create_project", False) and not is_file:
                     project_name = normalized
-                    print(f"[*] Workspace Focus - Selected project '{project_name}' from workspace path hint (will auto-create).")
+                    print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window (will auto-create).")
                     break
-
-        try:
-            workspace_tokens = re.findall(workspace_slug_pattern, args.workspace)
-        except re.error as e:
-            print(f"[Warning] Invalid workspace_slug_pattern regex '{workspace_slug_pattern}': {e}")
-            workspace_tokens = []
-        if workspace_tokens and isinstance(workspace_tokens[0], tuple):
-            workspace_tokens = [token[0] for token in workspace_tokens if token]
-        
-        # Extract workspace candidates by splitting the title on ' - ' and filtering out editor suffixes and file names
-        parts = [p.strip() for p in args.workspace.split(' - ') if p.strip()]
-        
-        is_obsidian = "obsidian" in args.workspace.lower()
-        if is_obsidian:
-            if "obsidian" not in [s.lower() for s in workspace_title_suffixes]:
-                workspace_title_suffixes.append("Obsidian")
-                
-        if is_obsidian and parts:
-            note_title = parts[0]
-            workspace_tokens = [t for t in workspace_tokens if t != note_title]
-
-        clean_parts = []
-        for idx, p in enumerate(parts):
-            if is_obsidian and idx == 0:
-                continue
-            if vault_base and p.lower() == os.path.basename(vault_base).lower():
-                continue
-            is_suffix = False
-            for suffix in workspace_title_suffixes:
-                if suffix.lower() in p.lower():
-                    is_suffix = True
-                    break
-            if is_suffix:
-                continue
-            # Filter out elements that look like filenames (ending with an extension like .py, .md, .ini, etc.)
-            if re.search(r'\.[a-zA-Z0-9]+$', p):
-                continue
-            clean_parts.append(p)
-
-        # VSCode/Antigravity titles often contain both file and workspace slugs/names.
-        # Prefer the code-workspace match first, then the rightmost slug token, then clean parts, and finally raw input.
-        candidate_tokens = list(reversed(workspace_tokens)) if workspace_tokens else []
-        try:
-            code_workspace_match = re.search(workspace_code_workspace_pattern, args.workspace, re.IGNORECASE)
-        except re.error as e:
-            print(f"[Warning] Invalid workspace_code_workspace_pattern regex '{workspace_code_workspace_pattern}': {e}")
-            code_workspace_match = None
-        if code_workspace_match:
-            candidate_tokens.insert(0, code_workspace_match.group(1))
-        
-        for p in reversed(clean_parts):
-            if p not in candidate_tokens:
-                candidate_tokens.append(p)
-                
-        if not is_obsidian:
-            candidate_tokens.append(args.workspace)
-        
-        seen_candidates = set()
-        for candidate in candidate_tokens:
-            if project_name:
-                break
-            normalized = normalize_workspace_name(
-                candidate,
-                workspace_normalization_patterns,
-                workspace_title_suffixes,
-            )
-            if not normalized or normalized in seen_candidates:
-                continue
-                
-            seen_candidates.add(normalized)
-            potential_dir = os.path.join(vault_base, normalized)
-            
-            # If the candidate appears as a file name with extension in the workspace title,
-            # we should not treat it as a project candidate for auto-creation.
-            is_file = bool(re.search(re.escape(candidate) + r'\.[a-zA-Z0-9]+', args.workspace, re.IGNORECASE))
-            
-            if os.path.exists(potential_dir) and os.path.isdir(potential_dir):
-                project_name = normalized
-                print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window.")
-                break
-            if config.get("auto_create_project", False) and not is_file:
-                project_name = normalized
-                print(f"[*] Workspace Focus - Selected project '{project_name}' from focused IDE window (will auto-create).")
-                break
             
     # 2. If no valid focused workspace is resolved, fall back to Smart Discovery scanning the input text
     if not project_name:
