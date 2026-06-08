@@ -997,7 +997,7 @@ def main():
             # Extract workspace candidates by splitting the title on ' - ' and filtering out editor suffixes and file names
             parts = [p.strip() for p in args.workspace.split(' - ') if p.strip()]
             
-            is_obsidian = "obsidian" in args.workspace.lower()
+            is_obsidian = bool(re.search(r'\s*-\s*Obsidian\b', args.workspace, re.IGNORECASE))
             if is_obsidian:
                 if "obsidian" not in [s.lower() for s in workspace_title_suffixes]:
                     workspace_title_suffixes.append("Obsidian")
