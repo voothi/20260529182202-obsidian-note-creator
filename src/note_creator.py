@@ -462,7 +462,7 @@ def process_zid_lines(lines, config, parent_title, dry_run=False, force_one_to_o
                 
     return updated_lines, notes_created
 
-def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_mode="lf", moc_spacing_mode="normalize"):
+def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_mode="lf", moc_spacing_mode="normalize", hierarchy_indent=-1):
     """
     Updates the active conversation MOC section with the newly formatted links.
     """
@@ -512,6 +512,37 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
         if moc_block[i].strip().startswith("-") or moc_block[i].strip().startswith("*"):
             last_item_idx = i
             break
+
+    if hierarchy_indent >= 0:
+        if last_item_idx != -1:
+            last_line = moc_block[last_item_idx]
+            indent_match = re.match(r'^(\s*)', last_line)
+            last_indent = len(indent_match.group(1)) if indent_match else 0
+            
+            adjusted_new_lines = []
+            current_indent = last_indent
+            for line in filtered_new_moc_lines:
+                current_indent += hierarchy_indent
+                stripped_line = line.strip()
+                if stripped_line.startswith("-") or stripped_line.startswith("*") or stripped_line.startswith("+"):
+                    new_line = " " * current_indent + stripped_line + "\n"
+                else:
+                    new_line = " " * current_indent + "- " + stripped_line + "\n"
+                adjusted_new_lines.append(new_line)
+            filtered_new_moc_lines = adjusted_new_lines
+        else:
+            adjusted_new_lines = []
+            current_indent = 0
+            for i, line in enumerate(filtered_new_moc_lines):
+                if i > 0:
+                    current_indent += hierarchy_indent
+                stripped_line = line.strip()
+                if stripped_line.startswith("-") or stripped_line.startswith("*") or stripped_line.startswith("+"):
+                    new_line = " " * current_indent + stripped_line + "\n"
+                else:
+                    new_line = " " * current_indent + "- " + stripped_line + "\n"
+                adjusted_new_lines.append(new_line)
+            filtered_new_moc_lines = adjusted_new_lines
             
     normalized_new_lines = []
     for line in filtered_new_moc_lines:
@@ -894,9 +925,12 @@ def main():
     parser.add_argument("--one-to-one", dest="one_to_one", action="store_true", default=None, help="Force saving exact copied message inside note description.")
     parser.add_argument("--no-one-to-one", dest="one_to_one", action="store_false", default=None, help="Disable one-to-one saving (revert to description-only).")
     parser.add_argument("-w", "--workspace", type=str, help="Active workspace name (e.g. 20260308110646-kardenwort-mpv) to dynamically discover project directories and active conversations.")
+    parser.add_argument("--hierarchy-indent", type=int, help="Number of spaces to indent new list entries relative to the last entry. Set to -1 to disable.")
     
     args = parser.parse_args()
     config = get_config(args.config)
+    if args.hierarchy_indent is not None:
+        config["hierarchy_indent"] = args.hierarchy_indent
     
     lines_to_process = []
     
@@ -1208,7 +1242,8 @@ def main():
                 moc_links_only,
                 args.dry_run,
                 config.get("eol", "lf"),
-                config.get("moc_spacing_mode", "normalize")
+                config.get("moc_spacing_mode", "normalize"),
+                hierarchy_indent=config.get("hierarchy_indent", -1)
             )
         
         # Combine output links for clipboard or printing

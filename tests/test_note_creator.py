@@ -1221,5 +1221,107 @@ Medium: [scripts/kardenwort/main.lua](u:/voothi/project/main.lua:6710) noisy log
         # Verify it is flagged as file so Pass 2 auto-creation will skip it
         self.assertTrue(candidate_norms_no_ws[0][2])
 
+    def test_update_conversation_moc_hierarchy_disabled(self):
+        """
+        Verify update_conversation_moc preserves original behavior when hierarchy_indent=-1.
+        """
+        from note_creator import update_conversation_moc
+        mock_conv_path = "mock_hierarchy_disabled.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("# Active Conversation\n## MOC.\n- [[20260601111135-first|First]]\n## Notes\n")
+        try:
+            new_moc_lines = ["- [[20260601114706-second|Second]]\n"]
+            update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False, hierarchy_indent=-1)
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("\n- [[20260601114706-second|Second]]\n", content)
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
+    def test_update_conversation_moc_hierarchy_enabled_empty_moc(self):
+        """
+        Verify update_conversation_moc indents sequentially when hierarchy_indent > 0 on an empty MOC.
+        """
+        from note_creator import update_conversation_moc
+        mock_conv_path = "mock_hierarchy_empty.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("# Active Conversation\n## MOC.\n## Notes\n")
+        try:
+            new_moc_lines = [
+                "- [[20260601111135-first|First]]\n",
+                "- [[20260601114706-second|Second]]\n",
+                "- [[20260601115000-third|Third]]\n"
+            ]
+            update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False, hierarchy_indent=4)
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            # MOC index
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            self.assertEqual(lines[moc_idx + 2], "- [[20260601111135-first|First]]\n")
+            self.assertEqual(lines[moc_idx + 3], "    - [[20260601114706-second|Second]]\n")
+            self.assertEqual(lines[moc_idx + 4], "        - [[20260601115000-third|Third]]\n")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
+    def test_update_conversation_moc_hierarchy_enabled_non_empty_moc(self):
+        """
+        Verify update_conversation_moc indents relative to last item's indentation when hierarchy_indent > 0.
+        """
+        from note_creator import update_conversation_moc
+        mock_conv_path = "mock_hierarchy_non_empty.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                "# Active Conversation\n"
+                "## MOC.\n"
+                "    - [[20260601111135-first|First]]\n"
+                "## Notes\n"
+            )
+        try:
+            new_moc_lines = [
+                "- [[20260601114706-second|Second]]\n",
+                "- [[20260601115000-third|Third]]\n"
+            ]
+            update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False, hierarchy_indent=4)
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            self.assertEqual(lines[moc_idx + 2], "    - [[20260601111135-first|First]]\n")
+            self.assertEqual(lines[moc_idx + 3], "        - [[20260601114706-second|Second]]\n")
+            self.assertEqual(lines[moc_idx + 4], "            - [[20260601115000-third|Third]]\n")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
+    def test_update_conversation_moc_hierarchy_zero_indent(self):
+        """
+        Verify update_conversation_moc inserts at same level as last item when hierarchy_indent=0.
+        """
+        from note_creator import update_conversation_moc
+        mock_conv_path = "mock_hierarchy_zero.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                "# Active Conversation\n"
+                "## MOC.\n"
+                "    - [[20260601111135-first|First]]\n"
+                "## Notes\n"
+            )
+        try:
+            new_moc_lines = [
+                "- [[20260601114706-second|Second]]\n",
+                "- [[20260601115000-third|Third]]\n"
+            ]
+            update_conversation_moc(mock_conv_path, new_moc_lines, dry_run=False, hierarchy_indent=0)
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            moc_idx = next(i for i, l in enumerate(lines) if l.strip() == "## MOC.")
+            self.assertEqual(lines[moc_idx + 2], "    - [[20260601111135-first|First]]\n")
+            self.assertEqual(lines[moc_idx + 3], "    - [[20260601114706-second|Second]]\n")
+            self.assertEqual(lines[moc_idx + 4], "    - [[20260601115000-third|Third]]\n")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
 if __name__ == '__main__':
     unittest.main()

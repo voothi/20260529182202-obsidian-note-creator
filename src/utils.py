@@ -40,6 +40,7 @@ def get_config(config_path="config.ini"):
     slug_word_count = config.getint("Parser", "slug_word_count", fallback=4)
     split_description = config.getboolean("Parser", "split_description", fallback=True)
     one_to_one = config.getboolean("Parser", "one_to_one", fallback=True)
+    hierarchy_indent = config.getint("Parser", "hierarchy_indent", fallback=-1)
     ignore_prefixes_raw = config.get("Parser", "ignore_prefixes", fallback="Edited ,Viewed ,Ran command:,Created At:,Completed At:,Created file ,Stdout:,Stderr:")
     ignore_prefixes = [p for p in ignore_prefixes_raw.split(",") if p]
     
@@ -92,6 +93,7 @@ def get_config(config_path="config.ini"):
         "slug_word_count": slug_word_count,
         "split_description": split_description,
         "one_to_one": one_to_one,
+        "hierarchy_indent": hierarchy_indent,
         "ignore_prefixes": ignore_prefixes,
         "vault_base": vault_base,
         "workspace_path_patterns": workspace_path_patterns,
