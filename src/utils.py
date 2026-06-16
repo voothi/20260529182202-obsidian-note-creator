@@ -161,9 +161,11 @@ def discover_active_conversation(conversations_dir):
         
     pattern = os.path.join(conversations_dir, "*conversation.md")
     files = glob.glob(pattern)
+    files = [f for f in files if re.match(r'^\d{14}-conversation\.md$', os.path.basename(f), re.IGNORECASE)]
     if not files:
         pattern_log = os.path.join(conversations_dir, "*log.md")
         files = glob.glob(pattern_log)
+        files = [f for f in files if re.match(r'^\d{14}-log\.md$', os.path.basename(f), re.IGNORECASE)]
         
     if not files:
         return None

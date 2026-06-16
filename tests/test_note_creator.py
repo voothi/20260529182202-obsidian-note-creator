@@ -363,8 +363,9 @@ I have identified exactly why the ZID duplication occurred and have successfully
         file1 = os.path.join(mock_dir, "20260529120000-conversation.md")
         file2 = os.path.join(mock_dir, "20260529130000-conversation.md")
         file3 = os.path.join(mock_dir, "20260529110000-conversation.md")
+        file4 = os.path.join(mock_dir, "20260529140000-some-task-ending-with-conversation.md")
         
-        for fpath in [file1, file2, file3]:
+        for fpath in [file1, file2, file3, file4]:
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write("# Mock Conversation")
                 
@@ -372,7 +373,7 @@ I have identified exactly why the ZID duplication occurred and have successfully
             latest = discover_active_conversation(mock_dir)
             self.assertEqual(os.path.abspath(latest), os.path.abspath(file2))
         finally:
-            for fpath in [file1, file2, file3]:
+            for fpath in [file1, file2, file3, file4]:
                 if os.path.exists(fpath):
                     os.remove(fpath)
             if os.path.exists(mock_dir):
