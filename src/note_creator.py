@@ -126,41 +126,42 @@ def find_existing_note_by_zid(conversations_dir, zid):
         return None
         
     prefix = f"{zid}-"
-    for entry in os.scandir(conversations_dir):
-        if entry.is_file() and entry.name.startswith(prefix) and entry.name.endswith(".md"):
-            filepath = entry.path
-            filename_no_ext = os.path.splitext(entry.name)[0]
-            
-            title = ""
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                    
-                # Parse title from H1 header: e.g. "# Title"
-                for line in lines:
-                    if line.startswith("# "):
-                        title = line[2:].strip()
-                        break
+    with os.scandir(conversations_dir) as entries:
+        for entry in entries:
+            if entry.is_file() and entry.name.startswith(prefix) and entry.name.endswith(".md"):
+                filepath = entry.path
+                filename_no_ext = os.path.splitext(entry.name)[0]
+                
+                title = ""
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
                         
-                # Fallback: parse title from aliases frontmatter
-                if not title:
-                    in_frontmatter = False
+                    # Parse title from H1 header: e.g. "# Title"
                     for line in lines:
-                        if line.strip() == "---":
-                            in_frontmatter = not in_frontmatter
-                            continue
-                        if in_frontmatter and line.strip().startswith("-"):
-                            title = line.strip()[1:].strip()
+                        if line.startswith("# "):
+                            title = line[2:].strip()
                             break
-            except Exception:
-                pass
+                            
+                    # Fallback: parse title from aliases frontmatter
+                    if not title:
+                        in_frontmatter = False
+                        for line in lines:
+                            if line.strip() == "---":
+                                in_frontmatter = not in_frontmatter
+                                continue
+                            if in_frontmatter and line.strip().startswith("-"):
+                                title = line.strip()[1:].strip()
+                                break
+                except Exception:
+                    pass
+                    
+                if not title:
+                    slug = filename_no_ext[len(prefix):]
+                    title = slug.replace("-", " ").capitalize()
+                    
+                return filepath, filename_no_ext, title
                 
-            if not title:
-                slug = filename_no_ext[len(prefix):]
-                title = slug.replace("-", " ").capitalize()
-                
-            return filepath, filename_no_ext, title
-            
     return None
 
 
