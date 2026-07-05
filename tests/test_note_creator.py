@@ -56,6 +56,14 @@ class TestNoteCreator(unittest.TestCase):
         self.assertEqual(sanitize_name("Ran command: openspec update", 4), "ran-command-openspec-update")
         self.assertEqual(sanitize_name("Check the original logic and--open", 4), "check-the-original-logic")
         self.assertEqual(sanitize_name("My cool task name", 2), "my-cool")
+        
+        # Test ZID exclusion (second ZID)
+        self.assertEqual(sanitize_name("/opsx-archive 20260701133515-staged-progressive-loading", 4), "opsx-archive-staged-progressive")
+        self.assertEqual(sanitize_name("zid-20260623000219", 4), "zid")
+        
+        # Test correct word counting with hyphens and underscores
+        self.assertEqual(sanitize_name("def test_config_case_sensitive_diffquiz_env", 4), "def-test-config-case")
+
 
     def test_split_first_sentence(self):
         """
