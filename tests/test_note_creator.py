@@ -1457,5 +1457,48 @@ All test cases have completed successfully.
         self.assertTrue(has_semantic_density("Go"))
         self.assertTrue(has_semantic_density("Task"))
 
+    def test_clean_task_name_formatting_preserves_tags_floats_and_flags(self):
+        """
+        Task 3.1: Verify clean_task_name_formatting preserves #tags, floats, flags, and increments
+        while cleanly stripping whitespace-followed headers and solitary ordinals.
+        """
+        self.assertEqual(clean_task_name_formatting("#todo fix parser"), "#todo fix parser")
+        self.assertEqual(clean_task_name_formatting("3.14 is pi"), "3.14 is pi")
+        self.assertEqual(clean_task_name_formatting("--force flag breaks sync"), "--force flag breaks sync")
+        self.assertEqual(clean_task_name_formatting("+1 for this idea"), "+1 for this idea")
+        self.assertEqual(clean_task_name_formatting("### 1. Actual Task Title"), "Actual Task Title")
+        self.assertEqual(clean_task_name_formatting("### 1."), "")
+        self.assertEqual(clean_task_name_formatting("1."), "")
+
+    def test_sanitize_name_preserves_business_ids_and_strips_timestamps(self):
+        """
+        Task 3.2: Verify sanitize_name preserves order and ticket numbers in slugs
+        while stripping full and partial timestamps.
+        """
+        self.assertEqual(sanitize_name("Order 123456 shipped"), "order-123456-shipped")
+        self.assertEqual(sanitize_name("Ticket 4711002 fix"), "ticket-4711002-fix")
+        self.assertEqual(sanitize_name("20261009114000 Full Task"), "full-task")
+        self.assertEqual(sanitize_name("202610091140 Partial Task"), "partial-task")
+
+    def test_unicode_semantic_density_and_roman_numeral_precision(self):
+        """
+        Task 3.3: Verify has_semantic_density validates non-Latin and accented Unicode scripts,
+        and is_trivial_line does not falsely flag common words like 'Xi' or 'Mix'.
+        """
+        self.assertTrue(has_semantic_density("Öl wechseln"))
+        self.assertTrue(has_semantic_density("日本語ノート"))
+        self.assertTrue(has_semantic_density("Ελληνικά"))
+        self.assertTrue(has_semantic_density("Öl"))
+        self.assertFalse(has_semantic_density("123"))
+        self.assertFalse(has_semantic_density("---"))
+
+        self.assertFalse(is_trivial_line("Xi"))
+        self.assertFalse(is_trivial_line("Mix"))
+        self.assertTrue(is_trivial_line("iv."))
+        self.assertTrue(is_trivial_line("IV."))
+        self.assertTrue(is_trivial_line("xi."))
+        self.assertTrue(is_trivial_line("XI."))
+
 if __name__ == '__main__':
     unittest.main()
+
