@@ -96,18 +96,21 @@ def is_trivial_line(line):
     if re.match(r'^\s*={3,}.*={3,}\s*$', stripped):
         return True
     # Solitary numbering/ordinals with optional hashes: e.g. "1.", "### 1.", "# 1", "a.", "iv."
-    if re.match(r'^(?:#+\s*)?(?:\d+|[a-zA-Z]|[ivxIVX]+)\.?\s*$', stripped):
+    if re.match(
+        r'^(?:#+\s*)?(?:\d+|[a-zA-Z]|(?:i{1,3}|iv|vi{0,3}|ix|x{1,2}i{0,3}|I{1,3}|IV|VI{0,3}|IX|X{1,2}I{0,3}))\.?\s*$',
+        stripped
+    ):
         return True
     return False
 
 def has_semantic_density(text):
     """
     Verifies that a title candidate contains at least 2 alphabetic characters
-    (supports Latin, Cyrillic, etc.) and is not solely numbers or punctuation.
+    (supports all Unicode scripts: Latin, Cyrillic, Greek, CJK, etc.) and is not solely numbers or punctuation.
     """
     if not text:
         return False
-    return len(re.findall(r'[a-zA-Zа-яА-ЯёЁ]', text)) >= 2
+    return len([c for c in text if c.isalpha()]) >= 2
 
 def clean_task_name_formatting(task_name):
     """
@@ -118,10 +121,15 @@ def clean_task_name_formatting(task_name):
     # 1. Iteratively strip leading headers and list markers
     while True:
         prev = task_name
-        # Strip leading hashes: e.g., "### ", "## "
-        task_name = re.sub(r'^\s*#+\s*', '', task_name)
-        # Strip leading list markers: e.g., "- [ ] ", "- ", "* ", "+ ", "1. ", "1. [x] "
-        task_name = re.sub(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s*', '', task_name)
+        # Solitary header or solitary list marker: e.g., "###", "1.", "- [ ]", "### 1."
+        if re.match(r'^\s*#+\s*$', task_name) or re.match(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s*$', task_name):
+            task_name = ''
+            break
+
+        # Strip leading hashes requiring trailing whitespace: e.g., "### ", "## "
+        task_name = re.sub(r'^\s*#+\s+', '', task_name)
+        # Strip leading list markers requiring trailing whitespace: e.g., "- [ ] ", "- ", "* ", "+ ", "1. ", "1. [x] "
+        task_name = re.sub(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s+', '', task_name)
         if task_name == prev:
             break
 
