@@ -575,7 +575,19 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
         
     if not filtered_new_moc_lines:
         print("[*] No new links to add to the MOC (all already linked).")
-        if spacing_mode != "normalize":
+        if spacing_mode == "preserve":
+            return True
+        if spacing_mode == "smart":
+            # Check if there are excessive blank lines at the end of moc_block before notes_section_idx
+            trailing_blank_count = 0
+            for i in range(len(moc_block) - 1, -1, -1):
+                if not moc_block[i].strip():
+                    trailing_blank_count += 1
+                else:
+                    break
+            if trailing_blank_count <= 1:
+                return True
+        elif spacing_mode != "normalize":
             return True
         print("[*] Normalizing MOC spacing only.")
         
@@ -644,8 +656,19 @@ def update_conversation_moc(active_conv_path, new_moc_lines, dry_run=False, eol_
                 + normalized_moc_section
                 + content_lines[notes_section_idx:]
             )
+        elif spacing_mode == "smart":
+            # Preserve existing internal spacing, but normalize trailing whitespace before '## Notes'
+            trimmed_end_idx = len(updated_moc_block)
+            while trimmed_end_idx > 0 and not updated_moc_block[trimmed_end_idx - 1].strip():
+                trimmed_end_idx -= 1
+            sanitized_moc_block = updated_moc_block[:trimmed_end_idx] + [eol_chars]
+            updated_content = (
+                content_lines[:moc_start_idx + 1]
+                + sanitized_moc_block
+                + content_lines[notes_section_idx:]
+            )
         else:
-            # Preserve existing spacing for already-managed files.
+            # Preserve mode: never collapse existing spacing
             updated_content = (
                 content_lines[:moc_start_idx + 1]
                 + updated_moc_block
