@@ -79,19 +79,56 @@ due:
 
 """
 
+def is_trivial_line(line):
+    """
+    Checks if a line is an ordinal index, horizontal rule, test banner,
+    or contains insufficient semantic content to serve as a note title.
+    """
+    if not line:
+        return True
+    stripped = line.strip()
+    if not stripped:
+        return True
+    # Markdown horizontal rules: ---, ***, ___, ===
+    if re.match(r'^(?:[-=*_]{3,})\s*$', stripped):
+        return True
+    # Test runner divider banners: e.g. === short test summary info ===
+    if re.match(r'^\s*={3,}.*={3,}\s*$', stripped):
+        return True
+    # Solitary numbering/ordinals with optional hashes: e.g. "1.", "### 1.", "# 1", "a.", "iv."
+    if re.match(r'^(?:#+\s*)?(?:\d+|[a-zA-Z]|[ivxIVX]+)\.?\s*$', stripped):
+        return True
+    return False
+
+def has_semantic_density(text):
+    """
+    Verifies that a title candidate contains at least 2 alphabetic characters
+    (supports Latin, Cyrillic, etc.) and is not solely numbers or punctuation.
+    """
+    if not text:
+        return False
+    return len(re.findall(r'[a-zA-Zа-яА-ЯёЁ]', text)) >= 2
+
 def clean_task_name_formatting(task_name):
     """
     Cleans leading list markers, headers, and formatting markers (backticks, asterisks)
     from a task name while preserving inner hyphens and underscores.
+    Iteratively strips combinations of headers and list markers.
     """
-    # 1. Strip leading list markers: e.g., "- [ ] ", "- ", "* ", "+ ", "1. "
-    task_name = re.sub(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s+', '', task_name)
-    # 2. Strip leading hashes: e.g., "### "
-    task_name = re.sub(r'^\s*#+\s+', '', task_name)
-    # 3. Strip backticks and asterisks anywhere
+    # 1. Iteratively strip leading headers and list markers
+    while True:
+        prev = task_name
+        # Strip leading hashes: e.g., "### ", "## "
+        task_name = re.sub(r'^\s*#+\s*', '', task_name)
+        # Strip leading list markers: e.g., "- [ ] ", "- ", "* ", "+ ", "1. ", "1. [x] "
+        task_name = re.sub(r'^\s*(?:[-*+]|\d+\.)(?:\s+\[[ xX]\])?\s*', '', task_name)
+        if task_name == prev:
+            break
+
+    # 2. Strip backticks and asterisks anywhere
     task_name = task_name.replace('`', '').replace('*', '')
     
-    # 3.5. Strip markdown images and links
+    # 3. Strip markdown images and links
     # Remove markdown images entirely: e.g., "![alt text](url)"
     task_name = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', task_name)
     # Strip markdown links to their text: e.g., "[Text](URL)" -> "Text"
@@ -227,34 +264,68 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         # Strip trailing bold/italic markers if present
         remaining_text = re.sub(r'^(?:\*\*|__|[*_])|(?:\*\*|__|[*_])$', '', remaining_text).strip()
         
-        # If there's remaining text on the ZID line, use it!
-        if remaining_text:
-            raw_task_name = remaining_text
-            clean_task_name = clean_task_name_formatting(remaining_text)
-            task_line_idx = zid_line_idx
-        else:
-            # Otherwise, scan downwards for the first non-empty line
+        # If there's remaining text on the ZID line, check if it's substantive
+        if remaining_text and not is_trivial_line(remaining_text):
+            cand_clean = clean_task_name_formatting(remaining_text)
+            if has_semantic_density(cand_clean):
+                raw_task_name = remaining_text
+                clean_task_name = cand_clean
+                task_line_idx = zid_line_idx
+
+        # If not found on ZID line, scan downwards for the first non-trivial line
+        if not clean_task_name:
+            first_non_empty_idx = None
             for idx in range(zid_line_idx + 1, len(lines)):
                 line_content = lines[idx].strip()
                 if line_content:
+                    if first_non_empty_idx is None:
+                        first_non_empty_idx = idx
+                    if is_trivial_line(line_content):
+                        continue
+                    cand_clean = clean_task_name_formatting(line_content)
+                    if not has_semantic_density(cand_clean):
+                        continue
                     raw_task_name = line_content
-                    clean_task_name = clean_task_name_formatting(line_content)
+                    clean_task_name = cand_clean
                     task_line_idx = idx
                     break
+
+            # Fallback if no non-trivial line met the semantic criteria
+            if not clean_task_name and first_non_empty_idx is not None:
+                line_content = lines[first_non_empty_idx].strip()
+                cand_clean = clean_task_name_formatting(line_content)
+                raw_task_name = line_content
+                clean_task_name = cand_clean if has_semantic_density(cand_clean) else "Untitled Note"
+                task_line_idx = first_non_empty_idx
     else:
-        # Fall back to the first non-empty line of the block (excluding service logs)
+        # Fall back to scanning the block (excluding service logs)
+        first_non_empty_idx = None
         for idx, line in enumerate(lines):
             cleaned_line = line.strip()
             if cleaned_line:
                 is_service_line = any(cleaned_line.startswith(p) for p in service_prefixes)
                 if is_service_line and len(lines) > 2:
                     continue
+                if first_non_empty_idx is None:
+                    first_non_empty_idx = idx
+                if is_trivial_line(cleaned_line):
+                    continue
+                cand_clean = clean_task_name_formatting(cleaned_line)
+                if not has_semantic_density(cand_clean):
+                    continue
                 raw_task_name = cleaned_line
-                clean_task_name = clean_task_name_formatting(cleaned_line)
+                clean_task_name = cand_clean
                 task_line_idx = idx
                 break
+
+        if not clean_task_name and first_non_empty_idx is not None:
+            cleaned_line = lines[first_non_empty_idx].strip()
+            cand_clean = clean_task_name_formatting(cleaned_line)
+            raw_task_name = cleaned_line
+            clean_task_name = cand_clean if has_semantic_density(cand_clean) else "Untitled Note"
+            task_line_idx = first_non_empty_idx
                 
-    if not clean_task_name:
+    if not clean_task_name or not has_semantic_density(clean_task_name):
         clean_task_name = "Untitled Note"
     else:
         # Strip any leading ZID from the front of the task name to avoid duplication in slug
@@ -262,15 +333,17 @@ def process_single_message_block(text, config, parent_title, dry_run=False, forc
         
     if raw_task_name:
         raw_task_name = re.sub(r'^[`"\']?\d{14}[`"\']?\s+', '', raw_task_name).strip()
+    if not raw_task_name or not has_semantic_density(raw_task_name):
+        raw_task_name = clean_task_name
         
     # Limit task name to first sentence if split is enabled
     if split_description:
         first_sentence, _ = split_first_sentence(clean_task_name, True)
-        if first_sentence:
+        if first_sentence and has_semantic_density(first_sentence):
             clean_task_name = first_sentence
             
         raw_first_sentence, _ = split_first_sentence(raw_task_name, True)
-        if raw_first_sentence:
+        if raw_first_sentence and has_semantic_density(raw_first_sentence):
             raw_task_name = raw_first_sentence
             
     safe_slug = sanitize_name(clean_task_name, slug_word_count)
