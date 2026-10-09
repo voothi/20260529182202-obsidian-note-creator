@@ -7,7 +7,7 @@ from datetime import datetime
 # Add src folder to import path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation, resolve_conversation_up_parents_from_root, normalize_workspace_name
+from note_creator import clean_task_name_formatting, process_single_message_block, process_zid_lines, ensure_root_note, initialize_active_conversation, ensure_root_moc_contains_conversation, resolve_conversation_up_parents_from_root, normalize_workspace_name, is_trivial_line, has_semantic_density
 from utils import sanitize_name, split_first_sentence
 from utils import get_config
 
@@ -1331,6 +1331,131 @@ Medium: [scripts/kardenwort/main.lua](u:/voothi/project/main.lua:6710) noisy log
         finally:
             if os.path.exists(mock_conv_path):
                 os.remove(mock_conv_path)
+
+    def test_process_single_message_block_skips_ordinal_header(self):
+        """
+        Verify process_single_message_block skips ordinal header '### 1.' and extracts
+        the real substantive sentence below it.
+        """
+        text = """20261009084049
+
+### 1.
+The input text processed in session was valid.
+"""
+        config = {
+            "conversations_dir": ".",
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 4,
+            "split_description": True,
+            "one_to_one": True
+        }
+        links, count = process_single_message_block(text, config, parent_title="test-conversation", dry_run=True)
+        self.assertEqual(count, 1)
+        self.assertEqual(
+            links[0],
+            "- [[20261009084049-the-input-text-processed|The input text processed in session was valid.]]\n"
+        )
+
+    def test_process_single_message_block_skips_horizontal_rules_and_banners(self):
+        """
+        Verify process_single_message_block skips dividers ('---') and pytest banners ('===...===').
+        """
+        text = """20261009084049
+
+---
+================== short test summary info ===================
+All test cases have completed successfully.
+"""
+        config = {
+            "conversations_dir": ".",
+            "active_conversation": "test-conversation.md",
+            "slug_word_count": 4,
+            "split_description": True,
+            "one_to_one": True
+        }
+        links, count = process_single_message_block(text, config, parent_title="test-conversation", dry_run=True)
+        self.assertEqual(count, 1)
+        self.assertEqual(
+            links[0],
+            "- [[20261009084049-all-test-cases-have|All test cases have completed successfully.]]\n"
+        )
+
+    def test_clean_task_name_formatting_multipass(self):
+        """
+        Verify clean_task_name_formatting iteratively strips headers wrapping list markers
+        and handles composite prefixes.
+        """
+        self.assertEqual(clean_task_name_formatting("### 1. Actual Task Title"), "Actual Task Title")
+        self.assertEqual(clean_task_name_formatting("- [x] ### Nested Task Title"), "Nested Task Title")
+        self.assertEqual(clean_task_name_formatting("### - [ ] 1. Deeply Nested"), "Deeply Nested")
+        self.assertEqual(clean_task_name_formatting("1."), "")
+        self.assertEqual(clean_task_name_formatting("### 1."), "")
+
+    def test_sanitize_name_strips_various_numeric_timestamps_and_fallbacks(self):
+        """
+        Verify sanitize_name strips 6-14 digit standalone numbers and guarantees non-empty slug fallback.
+        """
+        self.assertEqual(sanitize_name("210314 Task Name"), "task-name")
+        self.assertEqual(sanitize_name("2026105550 Another Task"), "another-task")
+        self.assertEqual(sanitize_name("20261009114000 Full Timestamp Task"), "full-timestamp-task")
+        self.assertEqual(sanitize_name("---"), "note")
+        self.assertEqual(sanitize_name("..."), "note")
+        self.assertEqual(sanitize_name(""), "note")
+        self.assertEqual(sanitize_name("20261009114000"), "note")
+        self.assertEqual(sanitize_name(clean_task_name_formatting("1.")), "note")
+        self.assertEqual(sanitize_name("Step 1"), "step-1")
+        self.assertEqual(sanitize_name("Port 8080"), "port-8080")
+
+    def test_update_conversation_moc_collapses_excessive_trailing_blank_lines(self):
+        """
+        Verify update_conversation_moc collapses excessive trailing blank lines before ## Notes in smart mode.
+        """
+        from note_creator import update_conversation_moc
+        mock_conv_path = "mock_trailing_blanks.md"
+        with open(mock_conv_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                "# Active Conversation\n"
+                "## MOC.\n"
+                "- [[20260601111135-first|First]]\n"
+                "\n"
+                "\n"
+                "\n"
+                "\n"
+                "\n"
+                "## Notes\n"
+            )
+        try:
+            changed = update_conversation_moc(
+                mock_conv_path,
+                ["- [[20260601114706-second|Second]]\n"],
+                dry_run=False,
+                moc_spacing_mode="smart"
+            )
+            self.assertTrue(changed)
+            with open(mock_conv_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            notes_idx = next(i for i, l in enumerate(lines) if l.strip() == "## Notes")
+            self.assertEqual(lines[notes_idx - 1].strip(), "")
+            self.assertNotEqual(lines[notes_idx - 2].strip(), "")
+        finally:
+            if os.path.exists(mock_conv_path):
+                os.remove(mock_conv_path)
+
+    def test_is_trivial_line_and_semantic_density(self):
+        """
+        Verify is_trivial_line and has_semantic_density detection functions.
+        """
+        self.assertTrue(is_trivial_line("1."))
+        self.assertTrue(is_trivial_line("### 1."))
+        self.assertTrue(is_trivial_line("---"))
+        self.assertTrue(is_trivial_line("================== short test summary info ==================="))
+        self.assertFalse(is_trivial_line("A real task line"))
+
+        self.assertFalse(has_semantic_density("1."))
+        self.assertFalse(has_semantic_density("---"))
+        self.assertFalse(has_semantic_density("A"))
+        self.assertTrue(has_semantic_density("Go"))
+        self.assertTrue(has_semantic_density("Task"))
 
 if __name__ == '__main__':
     unittest.main()
