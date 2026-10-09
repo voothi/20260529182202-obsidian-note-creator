@@ -110,9 +110,11 @@ def sanitize_name(input_string, slug_word_count=4):
     Sanitizes title string to create a safe, slugified filename.
     Matches the Obsidian Templater logic exactly.
     """
-    # Remove any 6 to 14-digit numeric timestamps (e.g. 20260701133515, 2026105550, 210314)
-    # from the name to avoid double ZIDs, raw timestamps, and excessively long filenames
-    processed_string = re.sub(r'\b\d{6,14}\b', '', input_string)
+    # Remove 14-digit ZIDs anywhere (\b\d{14}\b), date-prefixed timestamps (\b20\d{6,12}\b),
+    # or leading numeric timestamps (^\s*\d{6,14}\b) from the name to avoid double ZIDs,
+    # raw timestamps, and excessively long filenames, while preserving business numbers
+    # (e.g. Order 123456, Ticket 4711002).
+    processed_string = re.sub(r'(?:^\s*\d{6,14}\b|\b(?:\d{14}|20\d{6,12})\b)', '', input_string)
 
     replacements = {
         'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss',
